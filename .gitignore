@@ -1,0 +1,12 @@
+# İşletim sistemi / editör
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Araç betikleri için sanal ortam (varsa)
+.venv/
+__pycache__/
+
+# Yerel test/geçici dosyalar
+*.log

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Hacı Sadık &amp; Edibe Teyze: Mahalle Kaçamağı</title>
+  <meta name="description" content="Hacı Sadık ve Edibe Teyze ile mahallede 3D koşu oyunu. Sarıkız suyu topla, hacı parfümü fırlat, uçan süpürgeyle Devrim'i yakala!" />
+
+  <!-- PWA -->
+  <meta name="theme-color" content="#1b1032" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
+
+  <!-- iOS PWA desteği -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Mahalle Kaçamağı" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Build adımı yok: three.js modülleri doğrudan CDN'den import ediliyor -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+
+  <!-- ============ HUD (oyun içi) ============ -->
+  <div id="hud" class="hidden">
+    <div class="hud-top">
+      <div class="hud-stat-col">
+        <div class="stat-bar stat-bar-life">
+          <span class="stat-icon">❤</span>
+          <div class="bar"><div class="bar-fill life-fill" id="life-fill"></div></div>
+        </div>
+        <div class="stat-bar stat-bar-energy">
+          <span class="stat-icon">⚡</span>
+          <div class="bar"><div class="bar-fill energy-fill" id="energy-fill"></div></div>
+        </div>
+        <div class="hud-pill hud-pill-small" id="score-pill">
+          <span class="hud-label">SKOR</span>
+          <span class="hud-value" id="score-value">0</span>
+        </div>
+      </div>
+
+      <div class="hud-right-col">
+        <div class="level-pill" id="level-pill">01</div>
+        <div class="hud-right-row">
+          <button id="mute-btn" class="icon-btn" aria-label="Sesi kapat">🔊</button>
+          <button id="pause-btn" class="icon-btn" aria-label="Duraklat">⏸</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="swipe-hint" class="swipe-hint hidden">
+      <span class="swipe-arrow">➜</span>
+    </div>
+
+    <div class="hud-bottom">
+      <div id="chase-wrap" class="hud-pill hidden">
+        <span class="hud-label">DEVRİM'E MESAFE</span>
+        <div class="bar"><div class="bar-fill" id="chase-fill"></div></div>
+      </div>
+      <div id="power-banner" class="power-banner hidden"></div>
+    </div>
+
+    <!-- Dokunmatik kontroller -->
+    <div id="touch-controls">
+      <button id="btn-left" class="touch-btn" aria-label="Sola şerit değiştir">◀</button>
+      <button id="btn-action" class="touch-btn touch-btn-action" aria-label="Fırlat / Hızlan">●</button>
+      <button id="btn-right" class="touch-btn" aria-label="Sağa şerit değiştir">▶</button>
+    </div>
+  </div>
+
+  <!-- ============ Menü Ekranları ============ -->
+  <div id="overlay" class="overlay">
+
+    <section id="screen-loading" class="screen">
+      <div class="logo-mark">🧴</div>
+      <h1>Mahalle Kaçamağı</h1>
+      <p class="subtitle">Sahne hazırlanıyor…</p>
+      <div class="spinner"></div>
+    </section>
+
+    <section id="screen-webgl-error" class="screen hidden">
+      <h1>😕 Tarayıcı desteklenmiyor</h1>
+      <p class="subtitle">Bu oyun WebGL gerektirir. Lütfen güncel bir tarayıcı (Chrome, Safari, Edge) ile tekrar deneyin.</p>
+    </section>
+
+    <section id="screen-menu" class="screen hidden">
+      <div class="logo-mark">🧴</div>
+      <h1>Hacı Sadık &amp; Edibe Teyze</h1>
+      <p class="subtitle">Mahalle Kaçamağı — 3D Koşu Oyunu</p>
+      <button class="btn btn-primary" id="btn-play">OYNA</button>
+      <button class="btn btn-ghost" id="btn-howto">Nasıl Oynanır?</button>
+      <p class="best-score" id="best-score-label"></p>
+    </section>
+
+    <section id="screen-howto" class="screen hidden">
+      <h2>Nasıl Oynanır?</h2>
+      <div class="howto-grid">
+        <div class="howto-card">
+          <div class="howto-emoji">🧓👳‍♂️</div>
+          <h3>Hacı Sadık</h3>
+          <p>Sarıkız sularını topla, geçici güç kazan. Hacı parfümü şişelerini fırlatarak engelleri patlat.</p>
+        </div>
+        <div class="howto-card">
+          <div class="howto-emoji">👵🧹</div>
+          <h3>Edibe Teyze</h3>
+          <p>Uçan süpürgeyle engellere çarpmadan ilerle, kaçan torunun Devrim'i yakala.</p>
+        </div>
+      </div>
+      <p class="controls-hint">⌨️ Yön tuşları / A-D: Şerit değiştir · Boşluk: Fırlat / Hızlan<br/>📱 Kaydır veya butonlara dokun</p>
+      <button class="btn btn-primary" id="btn-howto-back">Geri</button>
+    </section>
+
+    <section id="screen-mode-select" class="screen hidden">
+      <h2>Karakterini Seç</h2>
+      <div class="mode-grid">
+        <button class="mode-card" id="mode-haci" data-mode="haci">
+          <div class="mode-emoji">🧓</div>
+          <h3>Hacı Sadık</h3>
+          <p>Topla, güçlen, fırlat!</p>
+        </button>
+        <button class="mode-card" id="mode-edibe" data-mode="edibe">
+          <div class="mode-emoji">👵</div>
+          <h3>Edibe Teyze</h3>
+          <p>Uç, kaç, yakala!</p>
+        </button>
+      </div>
+      <button class="btn btn-ghost" id="btn-mode-back">Geri</button>
+    </section>
+
+    <section id="screen-pause" class="screen hidden">
+      <h2>Duraklatıldı</h2>
+      <button class="btn btn-primary" id="btn-resume">Devam Et</button>
+      <button class="btn btn-ghost" id="btn-quit">Menüye Dön</button>
+    </section>
+
+    <section id="screen-gameover" class="screen hidden">
+      <h2 id="gameover-title">Oyun Bitti</h2>
+      <p class="final-score" id="final-score">Skor: 0</p>
+      <p class="best-score" id="gameover-best"></p>
+      <button class="btn btn-primary" id="btn-retry">Tekrar Oyna</button>
+      <button class="btn btn-ghost" id="btn-change-mode">Karakter Değiştir</button>
+    </section>
+
+  </div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
