@@ -1,9 +1,20 @@
 /**
  * Friends Service (Arkadaşlık ve Kullanıcı Arama Mantığı)
- * Kullanıcı arama, arkadaşlık isteği gönderme/kabul/red ve arkadaş listesi yönetimi.
+ * Cihazlar arası Firebase Cloud Firestore ve yerel depolama desteği.
  */
 
 import { authService } from './authService.js';
+import { 
+  db, 
+  isFirebaseActive, 
+  collection, 
+  doc, 
+  setDoc, 
+  getDocs, 
+  query, 
+  where, 
+  updateDoc 
+} from './firebase.js';
 
 const REQUESTS_KEY = 'mahalle_game_friend_requests_db';
 const FRIENDSHIPS_KEY = 'mahalle_game_friendships_db';
@@ -13,16 +24,11 @@ class FriendsService {
     this._ensureInitialData();
   }
 
-  /**
-   * Başlangıçta test için demo arkadaşlık verileri tanımlar
-   */
   _ensureInitialData() {
     if (!localStorage.getItem(REQUESTS_KEY)) {
       localStorage.setItem(REQUESTS_KEY, JSON.stringify([]));
     }
-
     if (!localStorage.getItem(FRIENDSHIPS_KEY)) {
-      // Örnek: EdibeTeyze ve HaciSadik başlangıçta arkadaştır
       const demoFriendships = [
         {
           id: 'rel_demo_1',
@@ -62,26 +68,36 @@ class FriendsService {
   }
 
   /**
-   * Kullanıcı Arama
-   * Mevcut kullanıcıyı hariç tutar ve arkadaşlık durumunu (none, pending_sent, pending_received, friend) ekler.
+   * Kullanıcı Arama (Canlı Cihazlar Arası / Yerel)
    */
-  searchUsers(query) {
+  async searchUsers(queryStr) {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) return [];
 
-    const cleanQuery = query.trim().toLowerCase();
+    const cleanQuery = queryStr.trim().toLowerCase();
     if (!cleanQuery) return [];
 
-    const allUsers = authService.getAllUsers();
+    let allUsers = [];
+    if (isFirebaseActive && db) {
+      try {
+        const snapshot = await getDocs(collection(db, 'users'));
+        snapshot.forEach(docSnap => allUsers.push(docSnap.data()));
+      } catch (err) {
+        console.warn('Firebase arama hatası, yerel deneniyor:', err);
+        allUsers = authService.getAllUsers();
+      }
+    } else {
+      allUsers = authService.getAllUsers();
+    }
+
     const requests = this._getRequests();
     const friendships = this._getFriendships();
 
     return allUsers
-      .filter(u => u.id !== currentUser.id && u.username.toLowerCase().includes(cleanQuery))
+      .filter(u => u.id !== currentUser.id && (u.username.toLowerCase().includes(cleanQuery) || u.username_lower?.includes(cleanQuery)))
       .map(user => {
         let status = 'none';
 
-        // Arkadaşlık kontrolü
         const isFriend = friendships.some(f => 
           (f.user1Id === currentUser.id && f.user2Id === user.id) ||
           (f.user2Id === currentUser.id && f.user1Id === user.id)
@@ -90,7 +106,6 @@ class FriendsService {
         if (isFriend) {
           status = 'friend';
         } else {
-          // İstek kontrolü
           const sentReq = requests.find(r => r.senderId === currentUser.id && r.receiverId === user.id && r.status === 'pending');
           const recvReq = requests.find(r => r.senderId === user.id && r.receiverId === currentUser.id && r.status === 'pending');
 
@@ -108,7 +123,7 @@ class FriendsService {
   /**
    * Arkadaşlık İsteği Gönder
    */
-  sendFriendRequest(targetUserId) {
+  async sendFriendRequest(targetUserId) {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) throw new Error('İstek göndermek için önce giriş yapmalısınız.');
     if (currentUser.id === targetUserId) throw new Error('Kendinize arkadaşlık isteği gönderemezsiniz.');
@@ -116,14 +131,12 @@ class FriendsService {
     const requests = this._getRequests();
     const friendships = this._getFriendships();
 
-    // Arkadaşlık kontrolü
     const isFriend = friendships.some(f => 
       (f.user1Id === currentUser.id && f.user2Id === targetUserId) ||
       (f.user2Id === currentUser.id && f.user1Id === targetUserId)
     );
     if (isFriend) throw new Error('Bu kullanıcı ile zaten arkadaşsınız.');
 
-    // Mevcut istek kontrolü
     const existingReq = requests.find(r => 
       ((r.senderId === currentUser.id && r.receiverId === targetUserId) ||
        (r.senderId === targetUserId && r.receiverId === currentUser.id)) &&
@@ -139,14 +152,17 @@ class FriendsService {
       createdAt: Date.now()
     };
 
+    if (isFirebaseActive && db) {
+      try {
+        await setDoc(doc(db, 'friend_requests', newRequest.id), newRequest);
+      } catch (e) {}
+    }
+
     requests.push(newRequest);
     this._saveRequests(requests);
     return newRequest;
   }
 
-  /**
-   * Bekleyen İstekleri Listele (Gelen ve Giden)
-   */
   getPendingRequests() {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) return { incoming: [], outgoing: [] };
@@ -155,33 +171,18 @@ class FriendsService {
 
     const incoming = requests
       .filter(r => r.receiverId === currentUser.id && r.status === 'pending')
-      .map(r => {
-        const sender = authService.getUserById(r.senderId);
-        return {
-          ...r,
-          sender
-        };
-      })
+      .map(r => ({ ...r, sender: authService.getUserById(r.senderId) }))
       .filter(r => r.sender !== null);
 
     const outgoing = requests
       .filter(r => r.senderId === currentUser.id && r.status === 'pending')
-      .map(r => {
-        const receiver = authService.getUserById(r.receiverId);
-        return {
-          ...r,
-          receiver
-        };
-      })
+      .map(r => ({ ...r, receiver: authService.getUserById(r.receiverId) }))
       .filter(r => r.receiver !== null);
 
     return { incoming, outgoing };
   }
 
-  /**
-   * Arkadaşlık İsteğini Kabul Et
-   */
-  acceptFriendRequest(requestId) {
+  async acceptFriendRequest(requestId) {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) throw new Error('Lütfen önce giriş yapın.');
 
@@ -194,23 +195,28 @@ class FriendsService {
     request.status = 'accepted';
     this._saveRequests(requests);
 
-    // Arkadaşlık ilişkisi ekle
     const friendships = this._getFriendships();
-    friendships.push({
+    const newFriendship = {
       id: 'rel_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
       user1Id: request.senderId,
       user2Id: request.receiverId,
       createdAt: Date.now()
-    });
+    };
+
+    if (isFirebaseActive && db) {
+      try {
+        await updateDoc(doc(db, 'friend_requests', requestId), { status: 'accepted' });
+        await setDoc(doc(db, 'friendships', newFriendship.id), newFriendship);
+      } catch (e) {}
+    }
+
+    friendships.push(newFriendship);
     this._saveFriendships(friendships);
   }
 
-  /**
-   * Arkadaşlık İsteğini Reddet
-   */
-  rejectFriendRequest(requestId) {
+  async rejectFriendRequest(requestId) {
     const currentUser = authService.getCurrentUser();
-    if (!currentUser) throw new Error('Lütfen önce giriş yapın.');
+    if (!currentUser) return;
 
     const requests = this._getRequests();
     const reqIndex = requests.findIndex(r => r.id === requestId && r.receiverId === currentUser.id);
@@ -218,12 +224,15 @@ class FriendsService {
     if (reqIndex !== -1) {
       requests[reqIndex].status = 'rejected';
       this._saveRequests(requests);
+
+      if (isFirebaseActive && db) {
+        try {
+          await updateDoc(doc(db, 'friend_requests', requestId), { status: 'rejected' });
+        } catch (e) {}
+      }
     }
   }
 
-  /**
-   * Onaylanmış Arkadaş Listesi (En Yüksek Skora Göre Sıralı)
-   */
   getFriendsList() {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) return [];
@@ -237,16 +246,10 @@ class FriendsService {
       .map(id => authService.getUserById(id))
       .filter(u => u !== null);
 
-    // Kendi profilimizi de liderlik tablosu mantığıyla ekleyelim
     const listWithMe = [...friends, currentUser];
-
-    // En yüksek skora göre sırala
     return listWithMe.sort((a, b) => (b.bestScore || 0) - (a.bestScore || 0));
   }
 
-  /**
-   * Arkadaşı Çıkar
-   */
   removeFriend(friendUserId) {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) return;
@@ -259,9 +262,6 @@ class FriendsService {
     this._saveFriendships(friendships);
   }
 
-  /**
-   * Bekleyen Gelen İstek Sayısı (Rozet İçin)
-   */
   getUnreadIncomingCount() {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) return 0;

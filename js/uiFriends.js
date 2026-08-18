@@ -462,13 +462,20 @@ class UIFriends {
     }
   }
 
-  handleSearch(query) {
+  async handleSearch(query) {
     if (!query || !query.trim()) {
       this.renderSearchResults([]);
       return;
     }
-    const results = friendsService.searchUsers(query);
-    this.renderSearchResults(results);
+    const container = document.getElementById('container-search-results');
+    if (container) container.innerHTML = `<div class="empty-state">Aranıyor…</div>`;
+
+    try {
+      const results = await friendsService.searchUsers(query);
+      this.renderSearchResults(results);
+    } catch (err) {
+      this.renderSearchResults([]);
+    }
   }
 
   renderSearchResults(results) {
