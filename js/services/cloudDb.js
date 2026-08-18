@@ -1,58 +1,66 @@
 /**
  * Cloud DB Service (Cihazlar Arası Canlı Sıfır-Yapılandırma Bulut Veritabanı)
- * Herhangi bir API key kurulumu gerektirmeden tüm cihazları (Tablet, Telefon, PC) 
+ * Herhangi bir API key veya özel kurulum gerektirmeden dünyadaki tüm cihazları (Tablet, Telefon, PC)
  * anında aynı canlı bulut havuzunda birleştirir.
  */
 
-const CLOUD_NAMESPACE = 'mahalle_kacamagi_game_db_v1';
-const CLOUD_ENDPOINT = 'https://kvstore.b-cdn.net/api/v1';
-
-// Alternatif güvenilir canlı bulut veritabanı kancası (npoint / jsonbin / kv)
-const API_URL = 'https://api.npoint.io/4688975ef7df6d795b5c';
+const MASTER_INDEX_ID = 'ff8081819ff5b11001a0152ffc6343c3';
+const CLOUD_URL = `https://api.restful-api.dev/objects/${MASTER_INDEX_ID}`;
 
 class CloudDb {
   constructor() {
-    this.cachedUsers = [];
-    this.cachedRequests = [];
-    this.cachedFriendships = [];
+    this.cachedData = null;
   }
 
   /**
-   * Buluttan Tüm Verileri Çek
+   * Buluttan Tüm Verileri Çek (Tüm Cihazların Ortak Veritabanı)
    */
   async fetchCloudData() {
     try {
-      const res = await fetch(API_URL, { cache: 'no-store' });
+      const res = await fetch(CLOUD_URL, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        cache: 'no-store'
+      });
       if (res.ok) {
-        const data = await res.json();
-        this.cachedUsers = data.users || [];
-        this.cachedRequests = data.requests || [];
-        this.cachedFriendships = data.friendships || [];
-        return data;
+        const result = await res.json();
+        if (result && result.data) {
+          this.cachedData = result.data;
+          return result.data;
+        }
       }
     } catch (err) {
-      console.warn('Bulut DB erişim uyarısı:', err);
+      console.warn('Bulut DB okuma uyarısı:', err);
     }
-    return { users: [], requests: [], friendships: [] };
+    return this.cachedData || { users: [], requests: [], friendships: [] };
   }
 
   /**
-   * Buluta Güncel Verileri Gönder
+   * Buluta Güncel Veriyi Yaz (Tüm Cihazlar Eşzamanlı Güncellenir)
    */
   async syncToCloud(payload) {
+    this.cachedData = payload;
     try {
-      await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      await fetch(CLOUD_URL, {
+        method: 'PUT',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: 'mahalle_master_index',
+          data: payload
+        })
       });
     } catch (err) {
-      console.warn('Bulut senkronizasyon hatası:', err);
+      console.warn('Bulut senkronizasyon yazma hatası:', err);
     }
   }
 
   /**
-   * Yeni Kullanıcıyı Canlı Buluta Kaydet
+   * Yeni Kullanıcıyı Canlı Buluta Kaydet / Güncelle
    */
   async saveUser(user) {
     const data = await this.fetchCloudData();

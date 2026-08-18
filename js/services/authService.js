@@ -167,7 +167,6 @@ class AuthService {
     );
 
     if (cloudUser) {
-      // Yerel kopyayı güncelle
       const localDb = this._getUsersDB();
       if (!localDb.some(u => u.id === cloudUser.id)) {
         localDb.push(cloudUser);
@@ -225,6 +224,10 @@ class AuthService {
   }
 
   getUserById(userId) {
+    if (cloudDb.cachedData && cloudDb.cachedData.users) {
+      const cloudMatch = cloudDb.cachedData.users.find(u => u.id === userId);
+      if (cloudMatch) return cloudMatch;
+    }
     const localUsers = this._getUsersDB();
     return localUsers.find(u => u.id === userId) || null;
   }
