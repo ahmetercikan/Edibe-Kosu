@@ -1,6 +1,6 @@
 // Basit "app shell" servis çalışanı: statik dosyaları önbelleğe alır,
 // böylece oyun bir kez yüklendikten sonra çevrimdışı da açılabilir.
-const CACHE_VERSION = 'mahalle-kacamagi-v3';
+const CACHE_VERSION = 'mahalle-kacamagi-v4';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -10,6 +10,7 @@ const PRECACHE_URLS = [
   './js/config.js',
   './js/services/authService.js',
   './js/services/friendsService.js',
+  './js/services/roomService.js',
   './js/uiFriends.js',
   './js/constants.js',
   './js/effects.js',

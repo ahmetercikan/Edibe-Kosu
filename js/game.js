@@ -16,6 +16,7 @@ import { InputController } from './input.js';
 import { AudioSystem } from './audio.js';
 import * as C from './constants.js';
 import { authService } from './services/authService.js';
+import { roomService } from './services/roomService.js';
 
 const clampX = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -161,6 +162,20 @@ export class Game {
     this.haciRig.visible = false;
     this.edibeRig.visible = false;
     this.devrimRig.visible = false;
+
+    // Rakip kamera ve 3D rig kurulumu (Bölünmüş Ekran için)
+    this.opponentCamera = new THREE.PerspectiveCamera(58, window.innerWidth / (window.innerHeight / 2), 0.1, 200);
+    this.opponentCamera.position.set(0, 4.4, 8.5);
+    this.opponentRigHaci = createHaciSadik();
+    this.opponentRigEdibe = createEdibeTeyze();
+    this.scene.add(this.opponentRigHaci, this.opponentRigEdibe);
+    this.opponentRigHaci.visible = false;
+    this.opponentRigEdibe.visible = false;
+
+    this.isDuelMode = false;
+    this.opponentData = { x: 0, lane: 1, isAlive: true, score: 0, avatar: '👵', username: 'Rakip', mode: 'haci' };
+
+    roomService.onFrame((frame) => this._onOpponentFrame(frame));
 
     this._camLookAt = new THREE.Vector3(0, 1.4, -6);
     this._camShake = { time: 0, strength: 0 };
@@ -316,21 +331,26 @@ export class Game {
     this.fireflies.update(t);
     this.effects.update(delta);
 
-    if (this.state === 'playing') {
-      this.elapsed += delta;
-      this._updatePlayer(delta);
-      this._updateSpawning(delta);
-      this._updateMovingObjects(delta);
-      this._updateProjectiles(delta);
-      if (this.mode === C.MODE.EDIBE) this._updateChase(delta);
-      this._updateScore(delta);
-      this._updateLevel();
-      this.ground.update(delta, this._currentSpeed());
-      this.skyline.update(delta, this._currentSpeed());
+      if (this.isDuelMode) {
+        roomService.broadcastFrame({
+          x: this.player.x,
+          lane: this.player.lane,
+          score: Math.floor(this.score),
+          isAlive: true,
+          mode: this.mode === C.MODE.HACI ? 'haci' : 'edibe'
+        });
+        const myScoreEl = document.getElementById('split-me-score');
+        if (myScoreEl) myScoreEl.textContent = Math.floor(this.score).toLocaleString('tr-TR');
+      }
     }
 
     this._updateCamera(delta);
-    this.composer.render();
+
+    if (this.isDuelMode) {
+      this._renderSplitScreen();
+    } else {
+      this.composer.render();
+    }
   };
 
   _currentSpeed() {
@@ -607,12 +627,136 @@ export class Game {
     // Giriş yapılmışsa profildeki ve liderlik tablosundaki skoru da güncelle
     authService.updateBestScore(finalScore);
 
+    if (this.isDuelMode) {
+      this.ui.hud.classList.add('hidden');
+      this._showDuelResults();
+      return;
+    }
+
     this.ui.gameoverTitle.textContent = isNewBest ? '🏆 Yeni Rekor!' : 'Oyun Bitti';
     this.ui.finalScore.textContent = `Skor: ${finalScore}`;
     this.ui.gameoverBest.textContent = `En iyi (${key === 'haci' ? 'Hacı Sadık' : 'Edibe Teyze'}): ${this.bestScores[key]}`;
     this.audio.gameOver();
     this._updateBestLabel();
     this._showScreen('gameover');
+  }
+
+  // ================= Bölünmüş Ekran (Split-Screen) Düello Modu =================
+  startDuel(opponentUser) {
+    this.isDuelMode = true;
+    this.opponentUser = opponentUser;
+    this.opponentScore = 0;
+    this.opponentData = { x: 0, lane: 1, isAlive: true, score: 0, avatar: opponentUser.avatar || '👵', username: opponentUser.username, mode: 'haci' };
+
+    const splitOverlay = document.getElementById('split-hud-overlay');
+    if (splitOverlay) splitOverlay.classList.remove('hidden');
+
+    const me = authService.getCurrentUser();
+    document.getElementById('split-opp-name').textContent = opponentUser.username;
+    document.getElementById('split-opp-avatar').textContent = opponentUser.avatar || '👵';
+    document.getElementById('split-me-name').textContent = me ? me.username : 'Sen';
+    document.getElementById('split-me-avatar').textContent = me ? me.avatar : '🧓';
+
+    this.startRun(C.MODE.HACI);
+  }
+
+  _onOpponentFrame(frame) {
+    if (!this.isDuelMode) return;
+    this.opponentData = { ...this.opponentData, ...frame };
+    const scoreEl = document.getElementById('split-opp-score');
+    if (scoreEl) scoreEl.textContent = Math.floor(frame.score || 0).toLocaleString('tr-TR');
+
+    const mode = frame.mode || 'haci';
+    this.opponentRigHaci.visible = mode !== 'edibe';
+    this.opponentRigEdibe.visible = mode === 'edibe';
+
+    const rig = mode === 'edibe' ? this.opponentRigEdibe : this.opponentRigHaci;
+    rig.position.set(frame.x || 0, 0, C.PLAYER_Z);
+    if (mode === 'edibe') {
+      animateFlight(rig.userData, this.clock.elapsedTime);
+    } else {
+      animateRunCycle(rig.userData, this.clock.elapsedTime, 1);
+    }
+  }
+
+  _renderSplitScreen() {
+    const w = this.canvas.clientWidth * (window.devicePixelRatio || 1);
+    const h = this.canvas.clientHeight * (window.devicePixelRatio || 1);
+    const halfH = Math.floor(h / 2);
+
+    this.renderer.setScissorTest(true);
+
+    // Üst Ekran: Rakip Görünümü
+    this.renderer.setViewport(0, halfH, w, halfH);
+    this.renderer.setScissor(0, halfH, w, halfH);
+    this.opponentCamera.aspect = w / halfH;
+    this.opponentCamera.updateProjectionMatrix();
+
+    const oppX = (this.opponentData.x || 0) * 0.6;
+    const oppDesired = new THREE.Vector3(oppX, 4.4, C.PLAYER_Z + 8.2);
+    const oppLookAt = new THREE.Vector3(oppX * 1.2, 1.4, C.PLAYER_Z - 6);
+    this.opponentCamera.position.copy(oppDesired);
+    this.opponentCamera.lookAt(oppLookAt);
+
+    this.renderer.render(this.scene, this.opponentCamera);
+
+    // Alt Ekran: Oyuncu Görünümü
+    this.renderer.setViewport(0, 0, w, halfH);
+    this.renderer.setScissor(0, 0, w, halfH);
+    this.camera.aspect = w / halfH;
+    this.camera.updateProjectionMatrix();
+    this.renderer.render(this.scene, this.camera);
+
+    this.renderer.setScissorTest(false);
+  }
+
+  _showDuelResults() {
+    const splitOverlay = document.getElementById('split-hud-overlay');
+    if (splitOverlay) splitOverlay.classList.add('hidden');
+
+    const modal = document.getElementById('modal-duel-result');
+    const titleEl = document.getElementById('duel-result-title');
+    const iconEl = document.getElementById('duel-result-icon');
+    const meScore = Math.floor(this.score);
+    const oppScore = Math.floor(this.opponentData.score || 0);
+
+    const me = authService.getCurrentUser();
+
+    document.getElementById('duel-res-me-avatar').textContent = me ? me.avatar : '🧓';
+    document.getElementById('duel-res-me-name').textContent = me ? me.username : 'Sen';
+    document.getElementById('duel-res-me-score').textContent = meScore.toLocaleString('tr-TR');
+
+    document.getElementById('duel-res-opp-avatar').textContent = this.opponentUser?.avatar || '👵';
+    document.getElementById('duel-res-opp-name').textContent = this.opponentUser?.username || 'Rakip';
+    document.getElementById('duel-res-opp-score').textContent = oppScore.toLocaleString('tr-TR');
+
+    if (meScore > oppScore) {
+      iconEl.textContent = '🏆';
+      titleEl.textContent = 'TEBRİKLER! KAZANDIN!';
+      this.audio.powerUp();
+    } else if (meScore < oppScore) {
+      iconEl.textContent = '💔';
+      titleEl.textContent = 'RAKİP KAZANDI!';
+    } else {
+      iconEl.textContent = '🤝';
+      titleEl.textContent = 'BERABERE!';
+    }
+
+    document.getElementById('btn-duel-quit').onclick = () => {
+      modal.classList.add('hidden');
+      this.isDuelMode = false;
+      roomService.leaveRoom();
+      this._showScreen('menu');
+    };
+
+    document.getElementById('btn-rematch').onclick = () => {
+      modal.classList.add('hidden');
+      if (this.opponentUser) {
+        roomService.sendInvite(this.opponentUser);
+      }
+    };
+
+    modal.classList.remove('hidden');
   }
 
   _updateCamera(delta) {

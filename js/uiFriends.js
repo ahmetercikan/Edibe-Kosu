@@ -4,6 +4,7 @@
 
 import { authService } from './services/authService.js';
 import { friendsService } from './services/friendsService.js';
+import { roomService } from './services/roomService.js';
 
 class UIFriends {
   constructor() {
@@ -18,6 +19,19 @@ class UIFriends {
     authService.onAuthStateChanged((user) => {
       this.updateHeaderUI(user);
       this.refreshFriendsModal();
+    });
+
+    // Düello davet dinleyicileri
+    roomService.onInvite((data) => this.handleIncomingDuelInvite(data));
+    roomService.onAccept((data) => {
+      this.showToast(`${data.fromUser.username} düello davetini kabul etti! ⚔️ Başlıyor...`, 'success');
+      this.closeFriendsModal();
+      if (window.__game) {
+        window.__game.startDuel(data.fromUser);
+      }
+    });
+    roomService.onReject((data) => {
+      this.showToast('Rakip düello davetini reddetti.', 'error');
     });
   }
 
@@ -324,13 +338,33 @@ class UIFriends {
             </div>
           </div>
           <div class="user-card-right">
-            ${!isMe ? `<button class="btn-icon-danger remove-friend-btn" data-id="${user.id}" title="Arkadaşlıktan Çıkar">❌</button>` : ''}
+            ${!isMe ? `
+              <button class="btn btn-sm btn-duel send-duel-btn" data-id="${user.id}" title="Canlı Düello Başlat">⚔️ Düello</button>
+              <button class="btn-icon-danger remove-friend-btn" data-id="${user.id}" title="Arkadaşlıktan Çıkar">❌</button>
+            ` : ''}
           </div>
         </div>
       `;
     });
 
     container.innerHTML = html;
+
+    // Düello butonlarını bağla
+    container.querySelectorAll('.send-duel-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.getAttribute('data-id');
+        const friend = friendsService.getFriendsList().find(u => u.id === id);
+        if (friend) {
+          try {
+            roomService.sendInvite(friend);
+            this.closeFriendsModal();
+            this.showToast(`${friend.username} kullanıcısına düello daveti gönderildi! ⚔️ Bekleniyor...`, 'info', 5000);
+          } catch (err) {
+            this.showToast(err.message, 'error');
+          }
+        }
+      });
+    });
 
     // Silme butonlarını bağla
     container.querySelectorAll('.remove-friend-btn').forEach(btn => {
@@ -560,6 +594,46 @@ class UIFriends {
 
       modal.classList.remove('hidden');
     });
+  }
+
+  /**
+   * Gelen Düello Daveti Modalı
+   */
+  handleIncomingDuelInvite(inviteData) {
+    const modal = document.getElementById('modal-duel-invite');
+    const msgEl = document.getElementById('duel-invite-msg');
+    const btnAccept = document.getElementById('btn-accept-duel');
+    const btnReject = document.getElementById('btn-reject-duel');
+
+    if (!modal) return;
+
+    if (msgEl) {
+      msgEl.textContent = `${inviteData.fromUser.avatar || '🧓'} ${inviteData.fromUser.username} seni Mahalle Düellosuna davet ediyor! ⚔️`;
+    }
+
+    const cleanup = () => {
+      modal.classList.add('hidden');
+    };
+
+    if (btnAccept) {
+      btnAccept.onclick = () => {
+        cleanup();
+        roomService.acceptInvite(inviteData);
+        this.closeFriendsModal();
+        if (window.__game) {
+          window.__game.startDuel(inviteData.fromUser);
+        }
+      };
+    }
+
+    if (btnReject) {
+      btnReject.onclick = () => {
+        cleanup();
+        roomService.rejectInvite(inviteData);
+      };
+    }
+
+    modal.classList.remove('hidden');
   }
 }
 

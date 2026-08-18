@@ -280,6 +280,72 @@
   <!-- ============ TOAST BİLDİRİMLERİ ============ -->
   <div id="toast-container" class="toast-container"></div>
 
+  <!-- ============ BÖLÜNMÜŞ EKRAN HUD OVERLAY (SPLIT-SCREEN) ============ -->
+  <div id="split-hud-overlay" class="split-hud-overlay hidden">
+    <!-- Üst Ekran HUD (Rakip) -->
+    <div class="split-hud-section split-hud-top">
+      <div class="split-player-tag">
+        <span class="split-avatar" id="split-opp-avatar">👵</span>
+        <span class="split-name" id="split-opp-name">RAKİP</span>
+      </div>
+      <div class="split-score-tag">SKOR: <span id="split-opp-score">0</span></div>
+    </div>
+
+    <!-- Canlı Skor Karşılaştırma Bölüm Çizgisi -->
+    <div class="split-divider-bar">
+      <span class="split-vs-badge">⚔️ VS ⚔️</span>
+    </div>
+
+    <!-- Alt Ekran HUD (Oyuncu) -->
+    <div class="split-hud-section split-hud-bottom">
+      <div class="split-player-tag">
+        <span class="split-avatar" id="split-me-avatar">🧓</span>
+        <span class="split-name" id="split-me-name">SEN</span>
+      </div>
+      <div class="split-score-tag">SKOR: <span id="split-me-score">0</span></div>
+    </div>
+  </div>
+
+  <!-- ============ DÜELLO DAVETİ GELEN MODAL ============ -->
+  <div id="modal-duel-invite" class="modal-backdrop hidden">
+    <div class="modal-card confirm-card">
+      <div class="confirm-icon">⚔️</div>
+      <h3>Mahalle Düello Daveti!</h3>
+      <p id="duel-invite-msg" class="confirm-message">Arkadaşın seni canlı düelloya davet ediyor!</p>
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" id="btn-reject-duel">Reddet</button>
+        <button class="btn btn-primary" id="btn-accept-duel">Kabul Et ⚔️</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DÜELLO SONUÇ MODAL ============ -->
+  <div id="modal-duel-result" class="modal-backdrop hidden">
+    <div class="modal-card confirm-card">
+      <div class="confirm-icon" id="duel-result-icon">🏆</div>
+      <h2 id="duel-result-title">DÜELLO BİTTİ</h2>
+      
+      <div class="duel-score-board">
+        <div class="duel-score-col">
+          <span class="user-avatar" id="duel-res-me-avatar">🧓</span>
+          <span class="user-name" id="duel-res-me-name">Sen</span>
+          <span class="user-score" id="duel-res-me-score">0</span>
+        </div>
+        <div class="duel-vs-text">VS</div>
+        <div class="duel-score-col">
+          <span class="user-avatar" id="duel-res-opp-avatar">👵</span>
+          <span class="user-name" id="duel-res-opp-name">Rakip</span>
+          <span class="user-score" id="duel-res-opp-score">0</span>
+        </div>
+      </div>
+
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" id="btn-duel-quit">Menüye Dön</button>
+        <button class="btn btn-primary" id="btn-rematch">Rövanş İste ⚔️</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="script.js"></script>
 </body>
 </html>
