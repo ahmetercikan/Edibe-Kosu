@@ -68,9 +68,24 @@ class UIFriends {
     // Auth Sekme Geçişleri (Giriş / Kayıt)
     const tabAuthLogin = document.getElementById('tab-auth-login');
     const tabAuthRegister = document.getElementById('tab-auth-register');
+    const linkGotoRegister = document.getElementById('link-goto-register');
+    const linkGotoLogin = document.getElementById('link-goto-login');
 
     if (tabAuthLogin) tabAuthLogin.addEventListener('click', () => this.switchAuthTab('login'));
     if (tabAuthRegister) tabAuthRegister.addEventListener('click', () => this.switchAuthTab('register'));
+
+    if (linkGotoRegister) {
+      linkGotoRegister.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.switchAuthTab('register');
+      });
+    }
+    if (linkGotoLogin) {
+      linkGotoLogin.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.switchAuthTab('login');
+      });
+    }
 
     // Auth Formları
     const formLogin = document.getElementById('form-login');
@@ -227,6 +242,7 @@ class UIFriends {
     try {
       await authService.login({ usernameOrEmail: usernameInput, password: passwordInput });
       this.closeAuthModal();
+      this.showToast('Giriş yapıldı! Hoş geldin 👋', 'success');
     } catch (err) {
       this.showAuthError(err.message);
     }
@@ -239,8 +255,13 @@ class UIFriends {
     const avatar = document.querySelector('input[name="reg-avatar"]:checked')?.value || '🧓';
 
     try {
-      await authService.register({ username, email, password, avatar });
+      const res = await authService.register({ username, email, password, avatar });
       this.closeAuthModal();
+      if (res && res.isAutoLoggedIn) {
+        this.showToast('👋 Bu hesap mevcut olduğu için doğrudan giriş yapıldı!', 'success');
+      } else {
+        this.showToast('Kayıt oluşturuldu! Hoş geldin 🚀', 'success');
+      }
     } catch (err) {
       this.showAuthError(err.message);
     }

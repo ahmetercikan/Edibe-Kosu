@@ -1,6 +1,6 @@
 /**
  * Auth Service (Kimlik Doğrulama & Kullanıcı Yönetimi)
- * Cihazlar arası canlı Firebase Cloud Firestore ve yerel LocalStorage desteği.
+ * Cihazlar arası Firebase Cloud Firestore ve yerel LocalStorage desteği.
  */
 
 import { APP_CONFIG } from '../config.js';
@@ -102,7 +102,7 @@ class AuthService {
   }
 
   /**
-   * Yeni Kullanıcı Kaydı (Firebase / LocalStorage)
+   * Yeni Kullanıcı Kaydı veya Akıllı Otomatik Giriş
    */
   async register({ username, email, password, avatar = '🧓' }) {
     const cleanUsername = username.trim();
@@ -116,24 +116,37 @@ class AuthService {
       throw new Error('Şifre en az 4 karakter olmalıdır.');
     }
 
-    // 1. Firebase Aktif İse Canlı Kontrol Yap
+    // 1. Firebase Canlı Kontrol Yap
     if (isFirebaseActive && db) {
       try {
         const q = query(collection(db, 'users'), where('username_lower', '==', cleanUsernameLower));
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
-          throw new Error('Bu kullanıcı adı zaten başka bir cihazda kullanılıyor.');
+          const existingUser = querySnapshot.docs[0].data();
+          // Eğer kullanıcının girdiği şifre mevcut hesapla eşleşiyorsa HATA VERME, doğrudan giriş yap!
+          if (existingUser.password === password) {
+            this._saveCurrentUser(existingUser);
+            return { ...existingUser, isAutoLoggedIn: true };
+          } else {
+            throw new Error('Bu kullanıcı adı zaten kayıtlı! Eğer senin hesabınsa lütfen "Giriş Yap" sekmesini kullanın.');
+          }
         }
       } catch (err) {
-        if (err.message.includes('kullanılıyor')) throw err;
-        console.warn('Firebase sorgulama hatası, yerel modla devam ediliyor:', err);
+        if (err.message.includes('kayıtlı')) throw err;
+        console.warn('Firebase sorgulama hatası:', err);
       }
     }
 
-    // 2. Yerel DB Çakışma Kontrolü
+    // 2. Yerel DB Çakışma ve Otomatik Giriş Kontrolü
     const localDb = this._getUsersDB();
-    if (localDb.some(u => u.username.toLowerCase() === cleanUsernameLower)) {
-      throw new Error('Bu kullanıcı adı zaten alınmış.');
+    const existingLocalUser = localDb.find(u => u.username.toLowerCase() === cleanUsernameLower);
+    if (existingLocalUser) {
+      if (existingLocalUser.password === password) {
+        this._saveCurrentUser(existingLocalUser);
+        return { ...existingLocalUser, isAutoLoggedIn: true };
+      } else {
+        throw new Error('Bu kullanıcı adı zaten kayıtlı! Lütfen "Giriş Yap" sekmesinden şifrenizi girin.');
+      }
     }
 
     const newUser = {
@@ -199,7 +212,7 @@ class AuthService {
     );
 
     if (!user) {
-      throw new Error('Kullanıcı adı/e-posta veya şifre hatalı!');
+      throw new Error('Kullanıcı adı/e-posta veya şifre hatalı! Henüz hesabınız yoksa "Kayıt Ol" sekmesini kullanın.');
     }
 
     this._saveCurrentUser(user);
@@ -217,14 +230,12 @@ class AuthService {
       this.currentUser.bestScore = newScore;
       this._saveCurrentUser(this.currentUser);
 
-      // Firebase güncelleme
       if (isFirebaseActive && db) {
         try {
           await updateDoc(doc(db, 'users', this.currentUser.id), { bestScore: newScore });
         } catch (e) {}
       }
 
-      // Local DB güncelleme
       const localDb = this._getUsersDB();
       const index = localDb.findIndex(u => u.id === this.currentUser.id);
       if (index !== -1) {

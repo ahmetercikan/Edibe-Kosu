@@ -905,5 +905,18 @@ h3 { margin: 6px 0 2px; }
   font-weight: 800;
 }
 
+.auth-switch-note {
+  font-size: 0.85rem;
+  color: #b5b3c2;
+  text-align: center;
+  margin-top: 10px;
+}
+.auth-switch-note a {
+  color: #ffbe2e;
+  font-weight: bold;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 
 
