@@ -120,69 +120,71 @@ export class Game {
   }
 
   // ================= Kurulum =================
+  // ================= Kurulum =================
   async init() {
     try {
       const setup = createSceneSetup(this.canvas);
       Object.assign(this, setup); // renderer, scene, camera, composer, sun, resize, degradeQuality
+
+      if (!this.renderer || !this.renderer.getContext()) {
+        this._showScreen('webglError');
+        return;
+      }
+
+      this.clock = new THREE.Clock();
+      this.effects = new EffectsSystem(this.scene);
+      this.ground = new Ground(this.scene);
+      this.skyline = new Skyline(this.scene);
+      this.fireflies = createAmbientFireflies(this.scene);
+
+      this.pools = {
+        ground: [
+          new ObjectPool(this.scene, createCrate, 6),
+          new ObjectPool(this.scene, createBarrel, 6),
+          new ObjectPool(this.scene, createCone, 6),
+        ],
+        air: [
+          new ObjectPool(this.scene, createWashingLine, 5),
+          new ObjectPool(this.scene, createSatelliteDish, 5),
+          new ObjectPool(this.scene, createBirdFlock, 5),
+        ],
+        water: new ObjectPool(this.scene, createWaterBottle, 8),
+        projectiles: new ObjectPool(this.scene, createPerfumeProjectile, 6),
+      };
+
+      this.haciRig = createHaciSadik();
+      this.edibeRig = createEdibeTeyze();
+      this.devrimRig = createDevrim();
+      this.scene.add(this.haciRig, this.edibeRig, this.devrimRig);
+      this.haciRig.visible = false;
+      this.edibeRig.visible = false;
+      this.devrimRig.visible = false;
+
+      // Rakip kamera ve 3D rig kurulumu (Bölünmüş Ekran için)
+      this.opponentCamera = new THREE.PerspectiveCamera(58, window.innerWidth / (window.innerHeight / 2), 0.1, 200);
+      this.opponentCamera.position.set(0, 4.4, 8.5);
+      this.opponentRigHaci = createHaciSadik();
+      this.opponentRigEdibe = createEdibeTeyze();
+      this.scene.add(this.opponentRigHaci, this.opponentRigEdibe);
+      this.opponentRigHaci.visible = false;
+      this.opponentRigEdibe.visible = false;
+
+      this.isDuelMode = false;
+      this.opponentData = { x: 0, lane: 1, isAlive: true, score: 0, avatar: '👵', username: 'Rakip', mode: 'haci' };
+
+      roomService.onFrame((frame) => this._onOpponentFrame(frame));
+
+      this._camLookAt = new THREE.Vector3(0, 1.4, -6);
+      this._camShake = { time: 0, strength: 0 };
+
+      this._updateBestLabel();
+      this._showScreen('menu');
+      this._loop();
     } catch (err) {
-      console.error(err);
-      this._showScreen('webglError');
-      return;
+      console.error('Oyun başlatılırken hata oluştu:', err);
+      // Hata durumunda yükleme ekranını kapatıp menüyü zorla göster
+      this._showScreen('menu');
     }
-    if (!this.renderer.getContext()) {
-      this._showScreen('webglError');
-      return;
-    }
-
-    this.clock = new THREE.Clock();
-    this.effects = new EffectsSystem(this.scene);
-    this.ground = new Ground(this.scene);
-    this.skyline = new Skyline(this.scene);
-    this.fireflies = createAmbientFireflies(this.scene);
-
-    this.pools = {
-      ground: [
-        new ObjectPool(this.scene, createCrate, 6),
-        new ObjectPool(this.scene, createBarrel, 6),
-        new ObjectPool(this.scene, createCone, 6),
-      ],
-      air: [
-        new ObjectPool(this.scene, createWashingLine, 5),
-        new ObjectPool(this.scene, createSatelliteDish, 5),
-        new ObjectPool(this.scene, createBirdFlock, 5),
-      ],
-      water: new ObjectPool(this.scene, createWaterBottle, 8),
-      projectiles: new ObjectPool(this.scene, createPerfumeProjectile, 6),
-    };
-
-    this.haciRig = createHaciSadik();
-    this.edibeRig = createEdibeTeyze();
-    this.devrimRig = createDevrim();
-    this.scene.add(this.haciRig, this.edibeRig, this.devrimRig);
-    this.haciRig.visible = false;
-    this.edibeRig.visible = false;
-    this.devrimRig.visible = false;
-
-    // Rakip kamera ve 3D rig kurulumu (Bölünmüş Ekran için)
-    this.opponentCamera = new THREE.PerspectiveCamera(58, window.innerWidth / (window.innerHeight / 2), 0.1, 200);
-    this.opponentCamera.position.set(0, 4.4, 8.5);
-    this.opponentRigHaci = createHaciSadik();
-    this.opponentRigEdibe = createEdibeTeyze();
-    this.scene.add(this.opponentRigHaci, this.opponentRigEdibe);
-    this.opponentRigHaci.visible = false;
-    this.opponentRigEdibe.visible = false;
-
-    this.isDuelMode = false;
-    this.opponentData = { x: 0, lane: 1, isAlive: true, score: 0, avatar: '👵', username: 'Rakip', mode: 'haci' };
-
-    roomService.onFrame((frame) => this._onOpponentFrame(frame));
-
-    this._camLookAt = new THREE.Vector3(0, 1.4, -6);
-    this._camShake = { time: 0, strength: 0 };
-
-    this._updateBestLabel();
-    this._showScreen('menu');
-    this._loop();
   }
 
   _updateBestLabel() {

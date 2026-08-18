@@ -1,6 +1,6 @@
 // Basit "app shell" servis çalışanı: statik dosyaları önbelleğe alır,
 // böylece oyun bir kez yüklendikten sonra çevrimdışı da açılabilir.
-const CACHE_VERSION = 'mahalle-kacamagi-v4';
+const CACHE_VERSION = 'mahalle-kacamagi-v5';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -50,18 +50,15 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   if (url.origin === self.location.origin) {
-    // Aynı origin: cache-first, arka planda güncelle (stale-while-revalidate).
+    // JS/HTML/CSS: Network-first (Güncel koda anında erişim, çevrimdışıyken cache)
     event.respondWith(
-      caches.match(request).then((cached) => {
-        const networkFetch = fetch(request).then((response) => {
-          if (response && response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        }).catch(() => cached);
-        return cached || networkFetch;
-      })
+      fetch(request).then((response) => {
+        if (response && response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_VERSION).then((cache) => cache.put(request, clone));
+        }
+        return response;
+      }).catch(() => caches.match(request))
     );
     return;
   }
