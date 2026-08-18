@@ -1,6 +1,6 @@
 // Basit "app shell" servis çalışanı: statik dosyaları önbelleğe alır,
 // böylece oyun bir kez yüklendikten sonra çevrimdışı da açılabilir.
-const CACHE_VERSION = 'mahalle-kacamagi-v6';
+const CACHE_VERSION = 'mahalle-kacamagi-v8';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -48,14 +48,15 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+  if (!url.protocol.startsWith('http')) return;
 
   if (url.origin === self.location.origin) {
     // JS/HTML/CSS: Network-first (Güncel koda anında erişim, çevrimdışıyken cache)
     event.respondWith(
       fetch(request).then((response) => {
-        if (response && response.ok) {
+        if (response && response.ok && (request.url.startsWith('http://') || request.url.startsWith('https://'))) {
           const clone = response.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(request, clone));
+          caches.open(CACHE_VERSION).then((cache) => cache.put(request, clone)).catch(() => {});
         }
         return response;
       }).catch(() => caches.match(request))
@@ -67,9 +68,9 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(request).then((cached) => {
       const networkFetch = fetch(request).then((response) => {
-        if (response && response.ok) {
+        if (response && response.ok && (request.url.startsWith('http://') || request.url.startsWith('https://'))) {
           const clone = response.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(request, clone));
+          caches.open(CACHE_VERSION).then((cache) => cache.put(request, clone)).catch(() => {});
         }
         return response;
       }).catch(() => cached);

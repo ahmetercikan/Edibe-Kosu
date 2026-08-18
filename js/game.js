@@ -340,6 +340,18 @@ export class Game {
     this.fireflies.update(t);
     this.effects.update(delta);
 
+    if (this.state === 'playing') {
+      this.elapsed += delta;
+      this._updatePlayer(delta);
+      this._updateSpawning(delta);
+      this._updateMovingObjects(delta);
+      this._updateProjectiles(delta);
+      if (this.mode === C.MODE.EDIBE) this._updateChase(delta);
+      this._updateScore(delta);
+      this._updateLevel();
+      this.ground.update(delta, this._currentSpeed());
+      this.skyline.update(delta, this._currentSpeed());
+
       if (this.isDuelMode) {
         roomService.broadcastFrame({
           x: this.player.x,
