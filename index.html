@@ -264,7 +264,21 @@
         <div id="container-search-results" class="user-list"></div>
       </div>
     </div>
+  <!-- ============ MODERN CONFIRM MODAL ============ -->
+  <div id="modal-confirm" class="modal-backdrop hidden">
+    <div class="modal-card confirm-card">
+      <div class="confirm-icon" id="confirm-icon">⚠️</div>
+      <h3 id="confirm-title">Onay Gerekli</h3>
+      <p id="confirm-message" class="confirm-message">Bu işlemi yapmak istediğinize emin misiniz?</p>
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" id="btn-confirm-cancel">Vazgeç</button>
+        <button class="btn btn-danger" id="btn-confirm-ok">Evet, Onayla</button>
+      </div>
+    </div>
   </div>
+
+  <!-- ============ TOAST BİLDİRİMLERİ ============ -->
+  <div id="toast-container" class="toast-container"></div>
 
   <script type="module" src="script.js"></script>
 </body>

@@ -698,3 +698,102 @@ h3 { margin: 6px 0 2px; }
   to { opacity: 1; transform: scale(1); }
 }
 
+/* ==========================================================================
+   MODERN CONFIRM MODAL & TOAST BİLDİRİMLERİ
+   ========================================================================== */
+
+.confirm-card {
+  max-width: 380px;
+  text-align: center;
+  padding: 28px 24px;
+}
+
+.confirm-icon {
+  font-size: 42px;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 0 10px rgba(255, 190, 46, 0.4));
+}
+
+.confirm-message {
+  color: #c9c7d8;
+  font-size: 0.95rem;
+  margin: 12px 0 24px;
+  line-height: 1.4;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.confirm-actions .btn {
+  margin-top: 0;
+  flex: 1;
+}
+
+/* Toast Bildirimleri Container */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  width: min(90%, 420px);
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: #1e1b2e;
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 500;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  animation: toastIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.toast.toast-hiding {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.9);
+}
+
+.toast-success {
+  border-color: rgba(46, 164, 79, 0.6);
+  background: linear-gradient(135deg, #1c2e24, #15221b);
+}
+.toast-success .toast-icon { color: #2ea44f; }
+
+.toast-error {
+  border-color: rgba(215, 58, 73, 0.6);
+  background: linear-gradient(135deg, #331d24, #24141a);
+}
+.toast-error .toast-icon { color: #f85149; }
+
+.toast-info {
+  border-color: rgba(255, 190, 46, 0.6);
+  background: linear-gradient(135deg, #332b1b, #241e13);
+}
+.toast-info .toast-icon { color: #ffbe2e; }
+
+.toast-icon {
+  font-size: 1.2rem;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-20px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+

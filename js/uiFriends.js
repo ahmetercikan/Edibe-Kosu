@@ -334,12 +334,20 @@ class UIFriends {
 
     // Silme butonlarını bağla
     container.querySelectorAll('.remove-friend-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         const id = e.currentTarget.getAttribute('data-id');
-        if (confirm('Bu kullanıcıyı arkadaşlarınızdan çıkarmak istediğinize emin misiniz?')) {
+        const confirmed = await this.showConfirm({
+          title: 'Arkadaşı Çıkar',
+          message: 'Bu kullanıcıyı arkadaşlarınızdan çıkarmak istediğinize emin misiniz?',
+          confirmText: 'Evet, Çıkar',
+          cancelText: 'Vazgeç',
+          icon: '🗑️'
+        });
+        if (confirmed) {
           friendsService.removeFriend(id);
           this.renderFriendsList();
           this.updateHeaderUI(currentUser);
+          this.showToast('Arkadaş listenizden çıkarıldı.', 'info');
         }
       });
     });
@@ -383,6 +391,7 @@ class UIFriends {
           friendsService.acceptFriendRequest(reqId);
           this.renderPendingRequests();
           this.updateHeaderUI(authService.getCurrentUser());
+          this.showToast('Arkadaşlık isteği kabul edildi! 🎉', 'success');
         });
       });
 
@@ -392,6 +401,7 @@ class UIFriends {
           friendsService.rejectFriendRequest(reqId);
           this.renderPendingRequests();
           this.updateHeaderUI(authService.getCurrentUser());
+          this.showToast('İstek reddedildi.', 'info');
         });
       });
     }
@@ -476,10 +486,79 @@ class UIFriends {
           const searchInput = document.getElementById('input-user-search');
           this.handleSearch(searchInput ? searchInput.value : '');
           this.updateHeaderUI(authService.getCurrentUser());
+          this.showToast('Arkadaşlık isteği gönderildi! ✨', 'success');
         } catch (err) {
-          alert(err.message);
+          this.showToast(err.message, 'error');
         }
       });
+    });
+  }
+
+  /**
+   * Modern Toast Bildirimi Göster
+   */
+  showToast(message, type = 'info', duration = 3000) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    let icon = 'ℹ️';
+    if (type === 'success') icon = '✅';
+    else if (type === 'error') icon = '❌';
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<span class="toast-icon">${icon}</span> <span>${message}</span>`;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add('toast-hiding');
+      setTimeout(() => toast.remove(), 300);
+    }, duration);
+  }
+
+  /**
+   * Modern Confirm Diyalogu Göster (Promise Döndürür)
+   */
+  showConfirm({ title = 'Onay Gerekli', message, confirmText = 'Evet, Onayla', cancelText = 'Vazgeç', icon = '⚠️' }) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('modal-confirm');
+      const titleEl = document.getElementById('confirm-title');
+      const messageEl = document.getElementById('confirm-message');
+      const iconEl = document.getElementById('confirm-icon');
+      const btnOk = document.getElementById('btn-confirm-ok');
+      const btnCancel = document.getElementById('btn-confirm-cancel');
+
+      if (!modal || !btnOk || !btnCancel) {
+        resolve(window.confirm(message));
+        return;
+      }
+
+      if (titleEl) titleEl.textContent = title;
+      if (messageEl) messageEl.textContent = message;
+      if (iconEl) iconEl.textContent = icon;
+      if (btnOk) btnOk.textContent = confirmText;
+      if (btnCancel) btnCancel.textContent = cancelText;
+
+      const cleanup = (result) => {
+        modal.classList.add('hidden');
+        btnOk.removeEventListener('click', onOk);
+        btnCancel.removeEventListener('click', onCancel);
+        modal.removeEventListener('click', onBackdrop);
+        resolve(result);
+      };
+
+      const onOk = () => cleanup(true);
+      const onCancel = () => cleanup(false);
+      const onBackdrop = (e) => {
+        if (e.target === modal) cleanup(false);
+      };
+
+      btnOk.addEventListener('click', onOk);
+      btnCancel.addEventListener('click', onCancel);
+      modal.addEventListener('click', onBackdrop);
+
+      modal.classList.remove('hidden');
     });
   }
 }
