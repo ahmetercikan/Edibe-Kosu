@@ -14,6 +14,21 @@ class AuthService {
     this.currentUser = this._loadCurrentUser();
     this._listeners = [];
     this._ensureInitialData();
+    this.syncLocalUsersToCloud();
+  }
+
+  async syncLocalUsersToCloud() {
+    try {
+      if (this.currentUser) {
+        await cloudDb.saveUser(this.currentUser);
+      }
+      const localUsers = this._getUsersDB();
+      for (const u of localUsers) {
+        await cloudDb.saveUser(u);
+      }
+    } catch (e) {
+      console.warn('Otomatik senkronizasyon uyarısı:', e);
+    }
   }
 
   _ensureInitialData() {

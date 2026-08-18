@@ -67,14 +67,25 @@ class FriendsService {
     const cleanQuery = queryStr.trim().toLowerCase();
     if (!cleanQuery) return [];
 
+    // Kendi hesabı ve yerel kullanıcıları buluta senkronize et
+    await authService.syncLocalUsersToCloud();
+
     // Buluttan ve Yerelden Tüm Verileri Çek
     const cloudData = await cloudDb.fetchCloudData();
-    const allUsers = cloudData.users || await authService.getAllUsers();
+    const cloudUsers = cloudData.users || [];
+    const localUsers = await authService.getAllUsers();
+
+    // Birleştir ve benzersizleştir
+    const userMap = new Map();
+    localUsers.forEach(u => userMap.set(u.username.toLowerCase(), u));
+    cloudUsers.forEach(u => userMap.set(u.username.toLowerCase(), u));
+
+    const allUsers = Array.from(userMap.values());
     const requests = [...this._getRequests(), ...(cloudData.requests || [])];
     const friendships = [...this._getFriendships(), ...(cloudData.friendships || [])];
 
     return allUsers
-      .filter(u => u.id !== currentUser.id && (u.username.toLowerCase().includes(cleanQuery) || u.username_lower?.includes(cleanQuery)))
+      .filter(u => u.username.toLowerCase() !== currentUser.username.toLowerCase() && (u.username.toLowerCase().includes(cleanQuery) || u.username_lower?.includes(cleanQuery)))
       .map(user => {
         let status = 'none';
 
