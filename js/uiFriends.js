@@ -1,0 +1,487 @@
+/**
+ * UI Friends (Kullanıcı Girişi ve Arkadaşlık Modalları Arayüz Yönetimi)
+ */
+
+import { authService } from './services/authService.js';
+import { friendsService } from './services/friendsService.js';
+
+class UIFriends {
+  constructor() {
+    this.activeTab = 'friends'; // 'friends', 'requests', 'search'
+    this.authTab = 'login'; // 'login', 'register'
+  }
+
+  init() {
+    this._bindEvents();
+    
+    // Auth durum değişikliklerini dinle
+    authService.onAuthStateChanged((user) => {
+      this.updateHeaderUI(user);
+      this.refreshFriendsModal();
+    });
+  }
+
+  _bindEvents() {
+    // Menü Butonları
+    const btnAuth = document.getElementById('btn-auth-modal');
+    const btnFriends = document.getElementById('btn-friends-modal');
+
+    if (btnAuth) btnAuth.addEventListener('click', () => this.openAuthModal());
+    if (btnFriends) btnFriends.addEventListener('click', () => this.openFriendsModal());
+
+    // Kapatma Butonları
+    const closeAuthBtn = document.getElementById('close-auth-modal');
+    const closeFriendsBtn = document.getElementById('close-friends-modal');
+
+    if (closeAuthBtn) closeAuthBtn.addEventListener('click', () => this.closeAuthModal());
+    if (closeFriendsBtn) closeFriendsBtn.addEventListener('click', () => this.closeFriendsModal());
+
+    // Modal Arka Planına Tıklayınca Kapatma
+    const authModal = document.getElementById('modal-auth');
+    const friendsModal = document.getElementById('modal-friends');
+
+    if (authModal) {
+      authModal.addEventListener('click', (e) => {
+        if (e.target === authModal) this.closeAuthModal();
+      });
+    }
+    if (friendsModal) {
+      friendsModal.addEventListener('click', (e) => {
+        if (e.target === friendsModal) this.closeFriendsModal();
+      });
+    }
+
+    // Auth Sekme Geçişleri (Giriş / Kayıt)
+    const tabAuthLogin = document.getElementById('tab-auth-login');
+    const tabAuthRegister = document.getElementById('tab-auth-register');
+
+    if (tabAuthLogin) tabAuthLogin.addEventListener('click', () => this.switchAuthTab('login'));
+    if (tabAuthRegister) tabAuthRegister.addEventListener('click', () => this.switchAuthTab('register'));
+
+    // Auth Formları
+    const formLogin = document.getElementById('form-login');
+    const formRegister = document.getElementById('form-register');
+
+    if (formLogin) {
+      formLogin.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await this.handleLogin();
+      });
+    }
+
+    if (formRegister) {
+      formRegister.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await this.handleRegister();
+      });
+    }
+
+    // Çıkış Yap Butonu
+    const btnLogout = document.getElementById('btn-logout');
+    if (btnLogout) {
+      btnLogout.addEventListener('click', () => {
+        authService.logout();
+        this.closeAuthModal();
+      });
+    }
+
+    // Arkadaşlık Modal Sekme Geçişleri
+    const tabFriendsList = document.getElementById('tab-friends-list');
+    const tabFriendsReqs = document.getElementById('tab-friends-requests');
+    const tabFriendsSearch = document.getElementById('tab-friends-search');
+
+    if (tabFriendsList) tabFriendsList.addEventListener('click', () => this.switchFriendsTab('friends'));
+    if (tabFriendsReqs) tabFriendsReqs.addEventListener('click', () => this.switchFriendsTab('requests'));
+    if (tabFriendsSearch) tabFriendsSearch.addEventListener('click', () => this.switchFriendsTab('search'));
+
+    // Arama Çubuğu
+    const inputSearch = document.getElementById('input-user-search');
+    const btnSearch = document.getElementById('btn-user-search');
+
+    if (btnSearch && inputSearch) {
+      btnSearch.addEventListener('click', () => this.handleSearch(inputSearch.value));
+      inputSearch.addEventListener('keyup', (e) => {
+        if (e.key === 'Enter') this.handleSearch(inputSearch.value);
+      });
+    }
+  }
+
+  updateHeaderUI(user) {
+    const btnAuth = document.getElementById('btn-auth-modal');
+    const btnFriends = document.getElementById('btn-friends-modal');
+    const badge = document.getElementById('friends-badge');
+
+    if (user) {
+      if (btnAuth) btnAuth.innerHTML = `${user.avatar || '👤'} ${user.username}`;
+      if (btnFriends) btnFriends.style.display = 'inline-flex';
+
+      // Rozet Güncelleme
+      const unreadCount = friendsService.getUnreadIncomingCount();
+      if (badge) {
+        if (unreadCount > 0) {
+          badge.textContent = unreadCount;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      }
+    } else {
+      if (btnAuth) btnAuth.innerHTML = `👤 Giriş Yap / Kayıt Ol`;
+      if (btnFriends) btnFriends.style.display = 'none';
+      if (badge) badge.classList.add('hidden');
+    }
+  }
+
+  // ================= AUTH MODAL =================
+
+  openAuthModal() {
+    const user = authService.getCurrentUser();
+    const modal = document.getElementById('modal-auth');
+    if (!modal) return;
+
+    const loggedInView = document.getElementById('auth-logged-in-view');
+    const loggedOutView = document.getElementById('auth-logged-out-view');
+
+    if (user) {
+      if (loggedInView) loggedInView.classList.remove('hidden');
+      if (loggedOutView) loggedOutView.classList.add('hidden');
+      
+      const usernameSpan = document.getElementById('profile-username');
+      const avatarSpan = document.getElementById('profile-avatar');
+      const scoreSpan = document.getElementById('profile-score');
+
+      if (usernameSpan) usernameSpan.textContent = user.username;
+      if (avatarSpan) avatarSpan.textContent = user.avatar || '👤';
+      if (scoreSpan) scoreSpan.textContent = (user.bestScore || 0).toLocaleString('tr-TR');
+    } else {
+      if (loggedInView) loggedInView.classList.add('hidden');
+      if (loggedOutView) loggedOutView.classList.remove('hidden');
+      this.switchAuthTab('login');
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  closeAuthModal() {
+    const modal = document.getElementById('modal-auth');
+    if (modal) modal.classList.add('hidden');
+    this.clearAuthErrors();
+  }
+
+  switchAuthTab(tab) {
+    this.authTab = tab;
+    const tabLogin = document.getElementById('tab-auth-login');
+    const tabRegister = document.getElementById('tab-auth-register');
+    const formLogin = document.getElementById('form-login');
+    const formRegister = document.getElementById('form-register');
+
+    this.clearAuthErrors();
+
+    if (tab === 'login') {
+      tabLogin?.classList.add('active');
+      tabRegister?.classList.remove('active');
+      formLogin?.classList.remove('hidden');
+      formRegister?.classList.add('hidden');
+    } else {
+      tabRegister?.classList.add('active');
+      tabLogin?.classList.remove('active');
+      formRegister?.classList.remove('hidden');
+      formLogin?.classList.add('hidden');
+    }
+  }
+
+  clearAuthErrors() {
+    const errorEl = document.getElementById('auth-error-msg');
+    if (errorEl) {
+      errorEl.textContent = '';
+      errorEl.classList.add('hidden');
+    }
+  }
+
+  showAuthError(msg) {
+    const errorEl = document.getElementById('auth-error-msg');
+    if (errorEl) {
+      errorEl.textContent = msg;
+      errorEl.classList.remove('hidden');
+    }
+  }
+
+  async handleLogin() {
+    const usernameInput = document.getElementById('login-username-input')?.value;
+    const passwordInput = document.getElementById('login-password-input')?.value;
+
+    try {
+      await authService.login({ usernameOrEmail: usernameInput, password: passwordInput });
+      this.closeAuthModal();
+    } catch (err) {
+      this.showAuthError(err.message);
+    }
+  }
+
+  async handleRegister() {
+    const username = document.getElementById('reg-username-input')?.value;
+    const email = document.getElementById('reg-email-input')?.value;
+    const password = document.getElementById('reg-password-input')?.value;
+    const avatar = document.querySelector('input[name="reg-avatar"]:checked')?.value || '🧓';
+
+    try {
+      await authService.register({ username, email, password, avatar });
+      this.closeAuthModal();
+    } catch (err) {
+      this.showAuthError(err.message);
+    }
+  }
+
+  // ================= FRIENDS MODAL =================
+
+  openFriendsModal() {
+    const user = authService.getCurrentUser();
+    if (!user) {
+      this.openAuthModal();
+      return;
+    }
+
+    const modal = document.getElementById('modal-friends');
+    if (!modal) return;
+
+    modal.classList.remove('hidden');
+    this.switchFriendsTab(this.activeTab);
+  }
+
+  closeFriendsModal() {
+    const modal = document.getElementById('modal-friends');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  switchFriendsTab(tab) {
+    this.activeTab = tab;
+    const btnList = document.getElementById('tab-friends-list');
+    const btnReqs = document.getElementById('tab-friends-requests');
+    const btnSearch = document.getElementById('tab-friends-search');
+
+    const viewList = document.getElementById('view-friends-list');
+    const viewReqs = document.getElementById('view-friends-requests');
+    const viewSearch = document.getElementById('view-friends-search');
+
+    [btnList, btnReqs, btnSearch].forEach(btn => btn?.classList.remove('active'));
+    [viewList, viewReqs, viewSearch].forEach(view => view?.classList.add('hidden'));
+
+    if (tab === 'friends') {
+      btnList?.classList.add('active');
+      viewList?.classList.remove('hidden');
+      this.renderFriendsList();
+    } else if (tab === 'requests') {
+      btnReqs?.classList.add('active');
+      viewReqs?.classList.remove('hidden');
+      this.renderPendingRequests();
+    } else if (tab === 'search') {
+      btnSearch?.classList.add('active');
+      viewSearch?.classList.remove('hidden');
+      const inputSearch = document.getElementById('input-user-search');
+      if (inputSearch && inputSearch.value.trim()) {
+        this.handleSearch(inputSearch.value);
+      } else {
+        this.renderSearchResults([]);
+      }
+    }
+  }
+
+  refreshFriendsModal() {
+    const modal = document.getElementById('modal-friends');
+    if (modal && !modal.classList.contains('hidden')) {
+      this.switchFriendsTab(this.activeTab);
+    }
+  }
+
+  renderFriendsList() {
+    const container = document.getElementById('container-friends-list');
+    if (!container) return;
+
+    const friends = friendsService.getFriendsList();
+    const currentUser = authService.getCurrentUser();
+
+    if (friends.length === 0) {
+      container.innerHTML = `<div class="empty-state">Henüz arkadaşınız yok. "Arkadaş Ara" sekmesinden mahalleden insanları ekleyebilirsiniz!</div>`;
+      return;
+    }
+
+    let html = '';
+    friends.forEach((user, index) => {
+      const isMe = user.id === currentUser?.id;
+      let medal = '';
+      if (index === 0) medal = '🥇';
+      else if (index === 1) medal = '🥈';
+      else if (index === 2) medal = '🥉';
+
+      html += `
+        <div class="user-card ${isMe ? 'card-me' : ''}">
+          <div class="user-card-left">
+            <span class="user-rank">${medal || (index + 1) + '.'}</span>
+            <span class="user-avatar">${user.avatar || '👤'}</span>
+            <div class="user-info">
+              <span class="user-name">${user.username} ${isMe ? '<small>(Sen)</small>' : ''}</span>
+              <span class="user-score">Skor: ${user.bestScore.toLocaleString('tr-TR')}</span>
+            </div>
+          </div>
+          <div class="user-card-right">
+            ${!isMe ? `<button class="btn-icon-danger remove-friend-btn" data-id="${user.id}" title="Arkadaşlıktan Çıkar">❌</button>` : ''}
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = html;
+
+    // Silme butonlarını bağla
+    container.querySelectorAll('.remove-friend-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.getAttribute('data-id');
+        if (confirm('Bu kullanıcıyı arkadaşlarınızdan çıkarmak istediğinize emin misiniz?')) {
+          friendsService.removeFriend(id);
+          this.renderFriendsList();
+          this.updateHeaderUI(currentUser);
+        }
+      });
+    });
+  }
+
+  renderPendingRequests() {
+    const containerIncoming = document.getElementById('container-incoming-requests');
+    const containerOutgoing = document.getElementById('container-outgoing-requests');
+
+    if (!containerIncoming || !containerOutgoing) return;
+
+    const { incoming, outgoing } = friendsService.getPendingRequests();
+
+    // Gelen istekler
+    if (incoming.length === 0) {
+      containerIncoming.innerHTML = `<div class="empty-state-small">Gelen arkadaşlık isteği yok.</div>`;
+    } else {
+      let html = '';
+      incoming.forEach(req => {
+        html += `
+          <div class="user-card">
+            <div class="user-card-left">
+              <span class="user-avatar">${req.sender.avatar || '👤'}</span>
+              <div class="user-info">
+                <span class="user-name">${req.sender.username}</span>
+                <span class="user-sub">Sana arkadaşlık isteği gönderdi.</span>
+              </div>
+            </div>
+            <div class="user-card-right">
+              <button class="btn btn-sm btn-success accept-req-btn" data-id="${req.id}">Kabul Et</button>
+              <button class="btn btn-sm btn-danger reject-req-btn" data-id="${req.id}">Reddet</button>
+            </div>
+          </div>
+        `;
+      });
+      containerIncoming.innerHTML = html;
+
+      containerIncoming.querySelectorAll('.accept-req-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const reqId = e.currentTarget.getAttribute('data-id');
+          friendsService.acceptFriendRequest(reqId);
+          this.renderPendingRequests();
+          this.updateHeaderUI(authService.getCurrentUser());
+        });
+      });
+
+      containerIncoming.querySelectorAll('.reject-req-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const reqId = e.currentTarget.getAttribute('data-id');
+          friendsService.rejectFriendRequest(reqId);
+          this.renderPendingRequests();
+          this.updateHeaderUI(authService.getCurrentUser());
+        });
+      });
+    }
+
+    // Giden istekler
+    if (outgoing.length === 0) {
+      containerOutgoing.innerHTML = `<div class="empty-state-small">Giden bekleyen istek yok.</div>`;
+    } else {
+      let html = '';
+      outgoing.forEach(req => {
+        html += `
+          <div class="user-card">
+            <div class="user-card-left">
+              <span class="user-avatar">${req.receiver.avatar || '👤'}</span>
+              <div class="user-info">
+                <span class="user-name">${req.receiver.username}</span>
+                <span class="user-sub">İstek gönderildi (Yanıt bekleniyor...)</span>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      containerOutgoing.innerHTML = html;
+    }
+  }
+
+  handleSearch(query) {
+    if (!query || !query.trim()) {
+      this.renderSearchResults([]);
+      return;
+    }
+    const results = friendsService.searchUsers(query);
+    this.renderSearchResults(results);
+  }
+
+  renderSearchResults(results) {
+    const container = document.getElementById('container-search-results');
+    if (!container) return;
+
+    if (results.length === 0) {
+      container.innerHTML = `<div class="empty-state">Kullanıcı bulunamadı.</div>`;
+      return;
+    }
+
+    let html = '';
+    results.forEach(user => {
+      let actionBtn = '';
+
+      if (user.friendshipStatus === 'friend') {
+        actionBtn = `<span class="badge-status badge-friend">✓ Arkadaşsınız</span>`;
+      } else if (user.friendshipStatus === 'pending_sent') {
+        actionBtn = `<span class="badge-status badge-pending">İstek Gönderildi</span>`;
+      } else if (user.friendshipStatus === 'pending_received') {
+        actionBtn = `<span class="badge-status badge-pending">İstek Geldi</span>`;
+      } else {
+        actionBtn = `<button class="btn btn-sm btn-primary send-req-btn" data-id="${user.id}">+ Arkadaş Ekle</button>`;
+      }
+
+      html += `
+        <div class="user-card">
+          <div class="user-card-left">
+            <span class="user-avatar">${user.avatar || '👤'}</span>
+            <div class="user-info">
+              <span class="user-name">${user.username}</span>
+              <span class="user-score">En Yüksek Skor: ${user.bestScore.toLocaleString('tr-TR')}</span>
+            </div>
+          </div>
+          <div class="user-card-right">
+            ${actionBtn}
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = html;
+
+    container.querySelectorAll('.send-req-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const targetId = e.currentTarget.getAttribute('data-id');
+        try {
+          friendsService.sendFriendRequest(targetId);
+          const searchInput = document.getElementById('input-user-search');
+          this.handleSearch(searchInput ? searchInput.value : '');
+          this.updateHeaderUI(authService.getCurrentUser());
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+    });
+  }
+}
+
+export const uiFriends = new UIFriends();

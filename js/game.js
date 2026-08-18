@@ -15,6 +15,7 @@ import { EffectsSystem } from './effects.js';
 import { InputController } from './input.js';
 import { AudioSystem } from './audio.js';
 import * as C from './constants.js';
+import { authService } from './services/authService.js';
 
 const clampX = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -600,6 +601,10 @@ export class Game {
       this.bestScores[key] = finalScore;
       localStorage.setItem(`mk_best_${key}`, String(finalScore));
     }
+
+    // Giriş yapılmışsa profildeki ve liderlik tablosundaki skoru da güncelle
+    authService.updateBestScore(finalScore);
+
     this.ui.gameoverTitle.textContent = isNewBest ? '🏆 Yeni Rekor!' : 'Oyun Bitti';
     this.ui.finalScore.textContent = `Skor: ${finalScore}`;
     this.ui.gameoverBest.textContent = `En iyi (${key === 'haci' ? 'Hacı Sadık' : 'Edibe Teyze'}): ${this.bestScores[key]}`;
