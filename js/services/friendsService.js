@@ -1,20 +1,10 @@
 /**
  * Friends Service (Arkadaşlık ve Kullanıcı Arama Mantığı)
- * Cihazlar arası Firebase Cloud Firestore ve yerel depolama desteği.
+ * Cihazlar arası Canlı Bulut Senkronizasyonlu Arkadaşlık Servisi.
  */
 
 import { authService } from './authService.js';
-import { 
-  db, 
-  isFirebaseActive, 
-  collection, 
-  doc, 
-  setDoc, 
-  getDocs, 
-  query, 
-  where, 
-  updateDoc 
-} from './firebase.js';
+import { cloudDb } from './cloudDb.js';
 
 const REQUESTS_KEY = 'mahalle_game_friend_requests_db';
 const FRIENDSHIPS_KEY = 'mahalle_game_friendships_db';
@@ -68,7 +58,7 @@ class FriendsService {
   }
 
   /**
-   * Kullanıcı Arama (Canlı Cihazlar Arası / Yerel)
+   * Cihazlar Arası Canlı Kullanıcı Arama
    */
   async searchUsers(queryStr) {
     const currentUser = authService.getCurrentUser();
@@ -77,21 +67,11 @@ class FriendsService {
     const cleanQuery = queryStr.trim().toLowerCase();
     if (!cleanQuery) return [];
 
-    let allUsers = [];
-    if (isFirebaseActive && db) {
-      try {
-        const snapshot = await getDocs(collection(db, 'users'));
-        snapshot.forEach(docSnap => allUsers.push(docSnap.data()));
-      } catch (err) {
-        console.warn('Firebase arama hatası, yerel deneniyor:', err);
-        allUsers = authService.getAllUsers();
-      }
-    } else {
-      allUsers = authService.getAllUsers();
-    }
-
-    const requests = this._getRequests();
-    const friendships = this._getFriendships();
+    // Buluttan ve Yerelden Tüm Verileri Çek
+    const cloudData = await cloudDb.fetchCloudData();
+    const allUsers = cloudData.users || await authService.getAllUsers();
+    const requests = [...this._getRequests(), ...(cloudData.requests || [])];
+    const friendships = [...this._getFriendships(), ...(cloudData.friendships || [])];
 
     return allUsers
       .filter(u => u.id !== currentUser.id && (u.username.toLowerCase().includes(cleanQuery) || u.username_lower?.includes(cleanQuery)))
@@ -121,15 +101,16 @@ class FriendsService {
   }
 
   /**
-   * Arkadaşlık İsteği Gönder
+   * Arkadaşlık İsteği Gönder (Canlı Bulut + Yerel)
    */
   async sendFriendRequest(targetUserId) {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) throw new Error('İstek göndermek için önce giriş yapmalısınız.');
     if (currentUser.id === targetUserId) throw new Error('Kendinize arkadaşlık isteği gönderemezsiniz.');
 
-    const requests = this._getRequests();
-    const friendships = this._getFriendships();
+    const cloudData = await cloudDb.fetchCloudData();
+    const requests = [...this._getRequests(), ...(cloudData.requests || [])];
+    const friendships = [...this._getFriendships(), ...(cloudData.friendships || [])];
 
     const isFriend = friendships.some(f => 
       (f.user1Id === currentUser.id && f.user2Id === targetUserId) ||
@@ -152,14 +133,14 @@ class FriendsService {
       createdAt: Date.now()
     };
 
-    if (isFirebaseActive && db) {
-      try {
-        await setDoc(doc(db, 'friend_requests', newRequest.id), newRequest);
-      } catch (e) {}
-    }
+    // Buluta Kaydet
+    await cloudDb.saveRequest(newRequest);
 
-    requests.push(newRequest);
-    this._saveRequests(requests);
+    // Yerel DB'ye Kaydet
+    const localReqs = this._getRequests();
+    localReqs.push(newRequest);
+    this._saveRequests(localReqs);
+
     return newRequest;
   }
 
@@ -189,26 +170,20 @@ class FriendsService {
     const requests = this._getRequests();
     const reqIndex = requests.findIndex(r => r.id === requestId && r.receiverId === currentUser.id);
 
-    if (reqIndex === -1) throw new Error('Arkadaşlık isteği bulunamadı.');
-
-    const request = requests[reqIndex];
-    request.status = 'accepted';
-    this._saveRequests(requests);
+    if (reqIndex !== -1) {
+      requests[reqIndex].status = 'accepted';
+      this._saveRequests(requests);
+    }
 
     const friendships = this._getFriendships();
     const newFriendship = {
       id: 'rel_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-      user1Id: request.senderId,
-      user2Id: request.receiverId,
+      user1Id: currentUser.id,
+      user2Id: requestId,
       createdAt: Date.now()
     };
 
-    if (isFirebaseActive && db) {
-      try {
-        await updateDoc(doc(db, 'friend_requests', requestId), { status: 'accepted' });
-        await setDoc(doc(db, 'friendships', newFriendship.id), newFriendship);
-      } catch (e) {}
-    }
+    await cloudDb.saveFriendship(newFriendship);
 
     friendships.push(newFriendship);
     this._saveFriendships(friendships);
@@ -224,12 +199,6 @@ class FriendsService {
     if (reqIndex !== -1) {
       requests[reqIndex].status = 'rejected';
       this._saveRequests(requests);
-
-      if (isFirebaseActive && db) {
-        try {
-          await updateDoc(doc(db, 'friend_requests', requestId), { status: 'rejected' });
-        } catch (e) {}
-      }
     }
   }
 

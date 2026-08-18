@@ -1,21 +1,10 @@
 /**
  * Auth Service (Kimlik Doğrulama & Kullanıcı Yönetimi)
- * Cihazlar arası Firebase Cloud Firestore ve yerel LocalStorage desteği.
+ * Tablet, Telefon ve PC arası 100% Canlı Bulut Senkronizasyonlu Auth Servisi.
  */
 
 import { APP_CONFIG } from '../config.js';
-import { 
-  db, 
-  isFirebaseActive, 
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  getDocs, 
-  query, 
-  where, 
-  updateDoc 
-} from './firebase.js';
+import { cloudDb } from './cloudDb.js';
 
 const USERS_STORAGE_KEY = 'mahalle_game_users_db';
 const CURRENT_USER_KEY = 'mahalle_game_current_user';
@@ -102,7 +91,7 @@ class AuthService {
   }
 
   /**
-   * Yeni Kullanıcı Kaydı veya Akıllı Otomatik Giriş
+   * Yeni Kullanıcı Kaydı veya Akıllı Giriş (Canlı Bulut Senkronizeli)
    */
   async register({ username, email, password, avatar = '🧓' }) {
     const cleanUsername = username.trim();
@@ -116,28 +105,21 @@ class AuthService {
       throw new Error('Şifre en az 4 karakter olmalıdır.');
     }
 
-    // 1. Firebase Canlı Kontrol Yap
-    if (isFirebaseActive && db) {
-      try {
-        const q = query(collection(db, 'users'), where('username_lower', '==', cleanUsernameLower));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          const existingUser = querySnapshot.docs[0].data();
-          // Eğer kullanıcının girdiği şifre mevcut hesapla eşleşiyorsa HATA VERME, doğrudan giriş yap!
-          if (existingUser.password === password) {
-            this._saveCurrentUser(existingUser);
-            return { ...existingUser, isAutoLoggedIn: true };
-          } else {
-            throw new Error('Bu kullanıcı adı zaten kayıtlı! Eğer senin hesabınsa lütfen "Giriş Yap" sekmesini kullanın.');
-          }
-        }
-      } catch (err) {
-        if (err.message.includes('kayıtlı')) throw err;
-        console.warn('Firebase sorgulama hatası:', err);
+    // 1. Canlı Bulut DB Çakışma / Otomatik Giriş Kontrolü
+    const cloudData = await cloudDb.fetchCloudData();
+    const cloudUsers = cloudData.users || [];
+    const existingCloudUser = cloudUsers.find(u => u.username.toLowerCase() === cleanUsernameLower);
+
+    if (existingCloudUser) {
+      if (existingCloudUser.password === password) {
+        this._saveCurrentUser(existingCloudUser);
+        return { ...existingCloudUser, isAutoLoggedIn: true };
+      } else {
+        throw new Error('Bu kullanıcı adı başka bir cihazda zaten kayıtlı! Eğer senin hesabınsa lütfen "Giriş Yap" sekmesini kullanın.');
       }
     }
 
-    // 2. Yerel DB Çakışma ve Otomatik Giriş Kontrolü
+    // 2. Yerel Kontrol
     const localDb = this._getUsersDB();
     const existingLocalUser = localDb.find(u => u.username.toLowerCase() === cleanUsernameLower);
     if (existingLocalUser) {
@@ -145,7 +127,7 @@ class AuthService {
         this._saveCurrentUser(existingLocalUser);
         return { ...existingLocalUser, isAutoLoggedIn: true };
       } else {
-        throw new Error('Bu kullanıcı adı zaten kayıtlı! Lütfen "Giriş Yap" sekmesinden şifrenizi girin.');
+        throw new Error('Bu kullanıcı adı zaten alınmış. Lütfen "Giriş Yap" sekmesini kullanın.');
       }
     }
 
@@ -160,16 +142,9 @@ class AuthService {
       createdAt: Date.now()
     };
 
-    // Firebase'e Yaz
-    if (isFirebaseActive && db) {
-      try {
-        await setDoc(doc(db, 'users', newUser.id), newUser);
-      } catch (err) {
-        console.warn('Firebase yazma hatası:', err);
-      }
-    }
+    // Buluta ve Yerel DB'ye Kaydet
+    await cloudDb.saveUser(newUser);
 
-    // Yerel DB'ye Yaz
     localDb.push(newUser);
     this._saveUsersDB(localDb);
 
@@ -178,45 +153,43 @@ class AuthService {
   }
 
   /**
-   * Kullanıcı Girişi (Firebase / LocalStorage)
+   * Kullanıcı Girişi (Canlı Bulut & Yerel Kontrol)
    */
   async login({ usernameOrEmail, password }) {
     const queryStr = usernameOrEmail.trim().toLowerCase();
 
-    // 1. Firebase Canlı Kontrol
-    if (isFirebaseActive && db) {
-      try {
-        const qUsername = query(collection(db, 'users'), where('username_lower', '==', queryStr), where('password', '==', password));
-        const qEmail = query(collection(db, 'users'), where('email', '==', queryStr), where('password', '==', password));
-
-        const [snapUser, snapEmail] = await Promise.all([getDocs(qUsername), getDocs(qEmail)]);
-
-        let matchedDoc = null;
-        if (!snapUser.empty) matchedDoc = snapUser.docs[0].data();
-        else if (!snapEmail.empty) matchedDoc = snapEmail.docs[0].data();
-
-        if (matchedDoc) {
-          this._saveCurrentUser(matchedDoc);
-          return matchedDoc;
-        }
-      } catch (err) {
-        console.warn('Firebase giriş hatası, yerelde deneniyor:', err);
-      }
-    }
-
-    // 2. Yerel DB Kontrolü
-    const dbUsers = this._getUsersDB();
-    const user = dbUsers.find(u => 
-      (u.username.toLowerCase() === queryStr || u.email.toLowerCase() === queryStr) &&
+    // 1. Canlı Bulut DB'de Ara
+    const cloudData = await cloudDb.fetchCloudData();
+    const cloudUsers = cloudData.users || [];
+    const cloudUser = cloudUsers.find(u => 
+      (u.username.toLowerCase() === queryStr || u.email?.toLowerCase() === queryStr) &&
       u.password === password
     );
 
-    if (!user) {
+    if (cloudUser) {
+      // Yerel kopyayı güncelle
+      const localDb = this._getUsersDB();
+      if (!localDb.some(u => u.id === cloudUser.id)) {
+        localDb.push(cloudUser);
+        this._saveUsersDB(localDb);
+      }
+      this._saveCurrentUser(cloudUser);
+      return cloudUser;
+    }
+
+    // 2. Yerel DB'de Ara
+    const localDb = this._getUsersDB();
+    const localUser = localDb.find(u => 
+      (u.username.toLowerCase() === queryStr || u.email?.toLowerCase() === queryStr) &&
+      u.password === password
+    );
+
+    if (!localUser) {
       throw new Error('Kullanıcı adı/e-posta veya şifre hatalı! Henüz hesabınız yoksa "Kayıt Ol" sekmesini kullanın.');
     }
 
-    this._saveCurrentUser(user);
-    return user;
+    this._saveCurrentUser(localUser);
+    return localUser;
   }
 
   async logout() {
@@ -230,12 +203,10 @@ class AuthService {
       this.currentUser.bestScore = newScore;
       this._saveCurrentUser(this.currentUser);
 
-      if (isFirebaseActive && db) {
-        try {
-          await updateDoc(doc(db, 'users', this.currentUser.id), { bestScore: newScore });
-        } catch (e) {}
-      }
+      // Buluta yaz
+      await cloudDb.saveUser(this.currentUser);
 
+      // Yerel DB yaz
       const localDb = this._getUsersDB();
       const index = localDb.findIndex(u => u.id === this.currentUser.id);
       if (index !== -1) {
@@ -246,13 +217,9 @@ class AuthService {
   }
 
   async getAllUsers() {
-    if (isFirebaseActive && db) {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'users'));
-        const remoteUsers = [];
-        querySnapshot.forEach(docSnap => remoteUsers.push(docSnap.data()));
-        if (remoteUsers.length > 0) return remoteUsers;
-      } catch (e) {}
+    const cloudData = await cloudDb.fetchCloudData();
+    if (cloudData.users && cloudData.users.length > 0) {
+      return cloudData.users;
     }
     return this._getUsersDB();
   }
