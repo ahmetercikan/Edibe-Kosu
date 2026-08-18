@@ -78,7 +78,10 @@ export class Game {
   _hideOverlay() { this.ui.overlay.classList.add('hidden'); }
 
   _bindMenuEvents() {
-    const click = (id, fn) => document.getElementById(id).addEventListener('click', () => { this.audio.uiClick(); fn(); });
+    const click = (id, fn) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('click', () => { this.audio.uiClick(); fn(); });
+    };
     click('btn-auth-modal', () => {});
     click('btn-friends-modal', () => {});
     click('btn-play', () => this._showScreen('modeSelect'));
@@ -91,12 +94,16 @@ export class Game {
     click('btn-quit', () => this.returnToMenu());
     click('btn-retry', () => this.startRun(this.mode));
     click('btn-change-mode', () => this._showScreen('modeSelect'));
-    this.ui.pauseBtn.addEventListener('click', () => this.togglePause());
-    this.ui.muteBtn.addEventListener('click', () => {
-      const enabled = !this.audio.enabled;
-      this.audio.setEnabled(enabled);
-      this.ui.muteBtn.textContent = enabled ? '🔊' : '🔇';
-    });
+    if (this.ui.pauseBtn) {
+      this.ui.pauseBtn.addEventListener('click', () => this.togglePause());
+    }
+    if (this.ui.muteBtn) {
+      this.ui.muteBtn.addEventListener('click', () => {
+        const enabled = !this.audio.enabled;
+        this.audio.setEnabled(enabled);
+        this.ui.muteBtn.textContent = enabled ? '🔊' : '🔇';
+      });
+    }
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.state === 'playing') this.pause();
     });

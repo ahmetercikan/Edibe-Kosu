@@ -11,12 +11,34 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   });
 }
 
-const game = new Game();
-game.init();
+// Güvenlik zamanlayıcısı: 2.5 saniye içinde yükleme ekranı kapanmazsa menüyü zorla aç
+const safetyTimer = setTimeout(() => {
+  const loadingScreen = document.getElementById('screen-loading');
+  if (loadingScreen && !loadingScreen.classList.contains('hidden')) {
+    console.warn('Güvenlik zamanlayıcısı tetiklendi: Yükleme ekranı kapatılıyor.');
+    loadingScreen.classList.add('hidden');
+    document.getElementById('screen-menu')?.classList.remove('hidden');
+    document.getElementById('overlay')?.classList.remove('hidden');
+  }
+}, 2500);
 
-// Giriş & Arkadaşlık arayüzünü başlat
-uiFriends.init();
+try {
+  const game = new Game();
+  window.__game = game;
+  game.init().then(() => {
+    clearTimeout(safetyTimer);
+  }).catch((err) => {
+    console.error('Oyun başlatılırken hata:', err);
+    clearTimeout(safetyTimer);
+    document.getElementById('screen-loading')?.classList.add('hidden');
+    document.getElementById('screen-menu')?.classList.remove('hidden');
+  });
 
-// Geliştirme/hata ayıklama için konsoldan erişim (window.__game).
-window.__game = game;
+  uiFriends.init();
+} catch (err) {
+  console.error('Kritik başlatma hatası:', err);
+  clearTimeout(safetyTimer);
+  document.getElementById('screen-loading')?.classList.add('hidden');
+  document.getElementById('screen-menu')?.classList.remove('hidden');
+}
 
