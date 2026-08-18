@@ -161,109 +161,109 @@
       <button class="btn btn-ghost" id="btn-change-mode">Karakter Değiştir</button>
     </section>
 
-    <!-- ============ AUTH MODAL ============ -->
-    <div id="modal-auth" class="modal-backdrop hidden">
-      <div class="modal-card">
-        <button class="modal-close" id="close-auth-modal">&times;</button>
-        
-        <!-- Oturum Açık Görünümü -->
-        <div id="auth-logged-in-view" class="hidden">
-          <div class="profile-header">
-            <span class="profile-avatar" id="profile-avatar">🧓</span>
-            <h2 id="profile-username">Kullanıcı</h2>
-            <p class="profile-score-tag">En Yüksek Skor: <span id="profile-score">0</span></p>
-          </div>
-          <button class="btn btn-danger btn-full" id="btn-logout">Çıkış Yap</button>
+  </div>
+
+  <!-- ============ AUTH MODAL ============ -->
+  <div id="modal-auth" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <button class="modal-close" id="close-auth-modal">&times;</button>
+      
+      <!-- Oturum Açık Görünümü -->
+      <div id="auth-logged-in-view" class="hidden">
+        <div class="profile-header">
+          <span class="profile-avatar" id="profile-avatar">🧓</span>
+          <h2 id="profile-username">Kullanıcı</h2>
+          <p class="profile-score-tag">En Yüksek Skor: <span id="profile-score">0</span></p>
         </div>
-
-        <!-- Oturum Kapalı (Giriş / Kayıt) Görünümü -->
-        <div id="auth-logged-out-view">
-          <div class="tab-header">
-            <button class="tab-btn active" id="tab-auth-login">Giriş Yap</button>
-            <button class="tab-btn" id="tab-auth-register">Kayıt Ol</button>
-          </div>
-
-          <div id="auth-error-msg" class="alert alert-error hidden"></div>
-
-          <!-- Giriş Formu -->
-          <form id="form-login" class="auth-form">
-            <div class="form-group">
-              <label>Kullanıcı Adı veya E-Posta</label>
-              <input type="text" id="login-username-input" required placeholder="ör. HaciSadik" />
-            </div>
-            <div class="form-group">
-              <label>Şifre</label>
-              <input type="password" id="login-password-input" required placeholder="••••••••" />
-            </div>
-            <button type="submit" class="btn btn-primary btn-full">Giriş Yap</button>
-          </form>
-
-          <!-- Kayıt Formu -->
-          <form id="form-register" class="auth-form hidden">
-            <div class="form-group">
-              <label>Kullanıcı Adı</label>
-              <input type="text" id="reg-username-input" required placeholder="ör. MahalleKoşucusu" minlength="3" />
-            </div>
-            <div class="form-group">
-              <label>E-Posta</label>
-              <input type="email" id="reg-email-input" required placeholder="ornek@mahalle.com" />
-            </div>
-            <div class="form-group">
-              <label>Şifre</label>
-              <input type="password" id="reg-password-input" required placeholder="••••••••" minlength="4" />
-            </div>
-            <div class="form-group">
-              <label>Avatar Seçin</label>
-              <div class="avatar-selector">
-                <label><input type="radio" name="reg-avatar" value="🧓" checked /> <span>🧓 Hacı</span></label>
-                <label><input type="radio" name="reg-avatar" value="👵" /> <span>👵 Edibe</span></label>
-                <label><input type="radio" name="reg-avatar" value="👦" /> <span>👦 Devrim</span></label>
-                <label><input type="radio" name="reg-avatar" value="🐱" /> <span>🐱 Kedi</span></label>
-              </div>
-            </div>
-            <button type="submit" class="btn btn-primary btn-full">Kayıt Ol ve Başla</button>
-          </form>
-        </div>
+        <button class="btn btn-danger btn-full" id="btn-logout">Çıkış Yap</button>
       </div>
-    </div>
 
-    <!-- ============ FRIENDS MODAL ============ -->
-    <div id="modal-friends" class="modal-backdrop hidden">
-      <div class="modal-card modal-large">
-        <button class="modal-close" id="close-friends-modal">&times;</button>
-        <h2>👥 Mahalle Arkadaşlarım</h2>
-        
+      <!-- Oturum Kapalı (Giriş / Kayıt) Görünümü -->
+      <div id="auth-logged-out-view">
         <div class="tab-header">
-          <button class="tab-btn active" id="tab-friends-list">Arkadaşlarım</button>
-          <button class="tab-btn" id="tab-friends-requests">İstekler</button>
-          <button class="tab-btn" id="tab-friends-search">Arkadaş Ara</button>
+          <button class="tab-btn active" id="tab-auth-login">Giriş Yap</button>
+          <button class="tab-btn" id="tab-auth-register">Kayıt Ol</button>
         </div>
 
-        <!-- Sekme 1: Arkadaşlarım (Liderlik Tablosu) -->
-        <div id="view-friends-list" class="tab-view">
-          <div id="container-friends-list" class="user-list"></div>
-        </div>
+        <div id="auth-error-msg" class="alert alert-error hidden"></div>
 
-        <!-- Sekme 2: İstekler -->
-        <div id="view-friends-requests" class="tab-view hidden">
-          <h4 class="section-title">Gelen İstekler</h4>
-          <div id="container-incoming-requests" class="user-list"></div>
-
-          <h4 class="section-title" style="margin-top: 15px;">Giden İstekler</h4>
-          <div id="container-outgoing-requests" class="user-list"></div>
-        </div>
-
-        <!-- Sekme 3: Arkadaş Ara -->
-        <div id="view-friends-search" class="tab-view hidden">
-          <div class="search-bar">
-            <input type="text" id="input-user-search" placeholder="Kullanıcı adı ile ara (ör. EdibeTeyze)" />
-            <button class="btn btn-primary btn-sm" id="btn-user-search">Ara</button>
+        <!-- Giriş Formu -->
+        <form id="form-login" class="auth-form">
+          <div class="form-group">
+            <label>Kullanıcı Adı veya E-Posta</label>
+            <input type="text" id="login-username-input" required placeholder="ör. HaciSadik" />
           </div>
-          <div id="container-search-results" class="user-list"></div>
-        </div>
+          <div class="form-group">
+            <label>Şifre</label>
+            <input type="password" id="login-password-input" required placeholder="••••••••" />
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Giriş Yap</button>
+        </form>
+
+        <!-- Kayıt Formu -->
+        <form id="form-register" class="auth-form hidden">
+          <div class="form-group">
+            <label>Kullanıcı Adı</label>
+            <input type="text" id="reg-username-input" required placeholder="ör. MahalleKoşucusu" minlength="3" />
+          </div>
+          <div class="form-group">
+            <label>E-Posta</label>
+            <input type="email" id="reg-email-input" required placeholder="ornek@mahalle.com" />
+          </div>
+          <div class="form-group">
+            <label>Şifre</label>
+            <input type="password" id="reg-password-input" required placeholder="••••••••" minlength="4" />
+          </div>
+          <div class="form-group">
+            <label>Avatar Seçin</label>
+            <div class="avatar-selector">
+              <label><input type="radio" name="reg-avatar" value="🧓" checked /> <span>🧓 Hacı</span></label>
+              <label><input type="radio" name="reg-avatar" value="👵" /> <span>👵 Edibe</span></label>
+              <label><input type="radio" name="reg-avatar" value="👦" /> <span>👦 Devrim</span></label>
+              <label><input type="radio" name="reg-avatar" value="🐱" /> <span>🐱 Kedi</span></label>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Kayıt Ol ve Başla</button>
+        </form>
       </div>
     </div>
+  </div>
 
+  <!-- ============ FRIENDS MODAL ============ -->
+  <div id="modal-friends" class="modal-backdrop hidden">
+    <div class="modal-card modal-large">
+      <button class="modal-close" id="close-friends-modal">&times;</button>
+      <h2>👥 Mahalle Arkadaşlarım</h2>
+      
+      <div class="tab-header">
+        <button class="tab-btn active" id="tab-friends-list">Arkadaşlarım</button>
+        <button class="tab-btn" id="tab-friends-requests">İstekler</button>
+        <button class="tab-btn" id="tab-friends-search">Arkadaş Ara</button>
+      </div>
+
+      <!-- Sekme 1: Arkadaşlarım (Liderlik Tablosu) -->
+      <div id="view-friends-list" class="tab-view">
+        <div id="container-friends-list" class="user-list"></div>
+      </div>
+
+      <!-- Sekme 2: İstekler -->
+      <div id="view-friends-requests" class="tab-view hidden">
+        <h4 class="section-title">Gelen İstekler</h4>
+        <div id="container-incoming-requests" class="user-list"></div>
+
+        <h4 class="section-title" style="margin-top: 15px;">Giden İstekler</h4>
+        <div id="container-outgoing-requests" class="user-list"></div>
+      </div>
+
+      <!-- Sekme 3: Arkadaş Ara -->
+      <div id="view-friends-search" class="tab-view hidden">
+        <div class="search-bar">
+          <input type="text" id="input-user-search" placeholder="Kullanıcı adı ile ara (ör. EdibeTeyze)" />
+          <button class="btn btn-primary btn-sm" id="btn-user-search">Ara</button>
+        </div>
+        <div id="container-search-results" class="user-list"></div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="script.js"></script>

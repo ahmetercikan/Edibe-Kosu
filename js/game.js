@@ -78,6 +78,8 @@ export class Game {
 
   _bindMenuEvents() {
     const click = (id, fn) => document.getElementById(id).addEventListener('click', () => { this.audio.uiClick(); fn(); });
+    click('btn-auth-modal', () => {});
+    click('btn-friends-modal', () => {});
     click('btn-play', () => this._showScreen('modeSelect'));
     click('btn-howto', () => this._showScreen('howto'));
     click('btn-howto-back', () => this._showScreen('menu'));
