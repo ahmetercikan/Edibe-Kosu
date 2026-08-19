@@ -5,6 +5,7 @@
 import { authService } from './services/authService.js';
 import { friendsService } from './services/friendsService.js';
 import { roomService } from './services/roomService.js';
+import { cloudDb } from './services/cloudDb.js';
 
 class UIFriends {
   constructor() {
@@ -17,6 +18,13 @@ class UIFriends {
     
     // Auth durum değişikliklerini dinle
     authService.onAuthStateChanged((user) => {
+      this.updateHeaderUI(user);
+      this.refreshFriendsModal();
+    });
+
+    // Bulut canlı güncelleme dinleyicisi (Farklı cihazlardan gelen istek/kullanıcı sinyalleri)
+    cloudDb.onCloudUpdate(() => {
+      const user = authService.getCurrentUser();
       this.updateHeaderUI(user);
       this.refreshFriendsModal();
     });
@@ -542,13 +550,13 @@ class UIFriends {
     container.innerHTML = html;
 
     container.querySelectorAll('.send-req-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         const targetId = e.currentTarget.getAttribute('data-id');
         try {
-          friendsService.sendFriendRequest(targetId);
+          await friendsService.sendFriendRequest(targetId);
           const searchInput = document.getElementById('input-user-search');
-          this.handleSearch(searchInput ? searchInput.value : '');
-          this.updateHeaderUI(authService.getCurrentUser());
+          await this.handleSearch(searchInput ? searchInput.value : '');
+          await this.updateHeaderUI(authService.getCurrentUser());
           this.showToast('Arkadaşlık isteği gönderildi! ✨', 'success');
         } catch (err) {
           this.showToast(err.message, 'error');

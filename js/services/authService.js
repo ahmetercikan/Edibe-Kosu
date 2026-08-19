@@ -19,12 +19,15 @@ class AuthService {
 
   async syncLocalUsersToCloud() {
     try {
-      if (this.currentUser) {
-        await cloudDb.saveUser(this.currentUser);
-      }
       const localUsers = this._getUsersDB();
-      for (const u of localUsers) {
-        await cloudDb.saveUser(u);
+      if (this.currentUser && !localUsers.some(u => u.id === this.currentUser.id)) {
+        localUsers.push(this.currentUser);
+      }
+      if (localUsers.length > 0) {
+        const syncedUsers = await cloudDb.saveUsers(localUsers);
+        if (syncedUsers && syncedUsers.length > 0) {
+          this._saveUsersDB(syncedUsers);
+        }
       }
     } catch (e) {
       console.warn('Otomatik senkronizasyon uyarısı:', e);
@@ -232,13 +235,21 @@ class AuthService {
 
   async getAllUsers() {
     const cloudData = await cloudDb.fetchCloudData();
-    if (cloudData.users && cloudData.users.length > 0) {
-      return cloudData.users;
-    }
-    return this._getUsersDB();
+    const cloudUsers = cloudData.users || [];
+    const localUsers = this._getUsersDB();
+    const userMap = new Map();
+    localUsers.forEach(u => { if (u && u.username) userMap.set(u.id || u.username.toLowerCase(), u); });
+    cloudUsers.forEach(u => { if (u && u.username) userMap.set(u.id || u.username.toLowerCase(), u); });
+    const allUsers = Array.from(userMap.values());
+    this._saveUsersDB(allUsers);
+    return allUsers;
   }
 
-  getUserById(userId) {
+  getUserById(userId, cloudUsers = null) {
+    if (cloudUsers && Array.isArray(cloudUsers)) {
+      const match = cloudUsers.find(u => u.id === userId);
+      if (match) return match;
+    }
     if (cloudDb.cachedData && cloudDb.cachedData.users) {
       const cloudMatch = cloudDb.cachedData.users.find(u => u.id === userId);
       if (cloudMatch) return cloudMatch;

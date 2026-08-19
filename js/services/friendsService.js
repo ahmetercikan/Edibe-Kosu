@@ -9,6 +9,21 @@ import { cloudDb } from './cloudDb.js';
 const REQUESTS_KEY = 'mahalle_game_friend_requests_db';
 const FRIENDSHIPS_KEY = 'mahalle_game_friendships_db';
 
+function normalizeStr(str) {
+  if (!str) return '';
+  return str
+    .toString()
+    .trim()
+    .toLocaleLowerCase('tr-TR')
+    .replace(/i̇/g, 'i')
+    .replace(/ı/g, 'i')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c');
+}
+
 class FriendsService {
   constructor() {
     this._ensureInitialData();
@@ -64,8 +79,8 @@ class FriendsService {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) return [];
 
-    const cleanQuery = queryStr.trim().toLowerCase();
-    if (!cleanQuery) return [];
+    const normQuery = normalizeStr(queryStr);
+    if (!normQuery) return [];
 
     // Kendi hesabı ve yerel kullanıcıları buluta senkronize et
     await authService.syncLocalUsersToCloud();
@@ -77,15 +92,22 @@ class FriendsService {
 
     // Birleştir ve benzersizleştir
     const userMap = new Map();
-    localUsers.forEach(u => userMap.set(u.username.toLowerCase(), u));
-    cloudUsers.forEach(u => userMap.set(u.username.toLowerCase(), u));
+    localUsers.forEach(u => { if (u && u.username) userMap.set(u.id || u.username.toLowerCase(), u); });
+    cloudUsers.forEach(u => { if (u && u.username) userMap.set(u.id || u.username.toLowerCase(), u); });
 
     const allUsers = Array.from(userMap.values());
     const requests = [...this._getRequests(), ...(cloudData.requests || [])];
     const friendships = [...this._getFriendships(), ...(cloudData.friendships || [])];
 
+    const normCurrentUsername = normalizeStr(currentUser.username);
+
     return allUsers
-      .filter(u => u.username.toLowerCase() !== currentUser.username.toLowerCase() && (u.username.toLowerCase().includes(cleanQuery) || u.username_lower?.includes(cleanQuery)))
+      .filter(u => {
+        if (!u || !u.username) return false;
+        const normName = normalizeStr(u.username);
+        const normNameLower = normalizeStr(u.username_lower);
+        return normName !== normCurrentUsername && (normName.includes(normQuery) || normNameLower.includes(normQuery));
+      })
       .map(user => {
         let status = 'none';
 
@@ -161,6 +183,7 @@ class FriendsService {
 
     const cloudData = await cloudDb.fetchCloudData();
     const cloudReqs = cloudData.requests || [];
+    const cloudUsers = cloudData.users || [];
     const localReqs = this._getRequests();
 
     const reqMap = new Map();
@@ -170,12 +193,12 @@ class FriendsService {
 
     const incoming = requests
       .filter(r => r.receiverId === currentUser.id && r.status === 'pending')
-      .map(r => ({ ...r, sender: authService.getUserById(r.senderId) }))
+      .map(r => ({ ...r, sender: authService.getUserById(r.senderId, cloudUsers) }))
       .filter(r => r.sender !== null);
 
     const outgoing = requests
       .filter(r => r.senderId === currentUser.id && r.status === 'pending')
-      .map(r => ({ ...r, receiver: authService.getUserById(r.receiverId) }))
+      .map(r => ({ ...r, receiver: authService.getUserById(r.receiverId, cloudUsers) }))
       .filter(r => r.receiver !== null);
 
     return { incoming, outgoing };
@@ -186,14 +209,14 @@ class FriendsService {
     if (!currentUser) throw new Error('Lütfen önce giriş yapın.');
 
     const cloudData = await cloudDb.fetchCloudData();
-    const requests = cloudData.requests || this._getRequests();
+    const requests = [...(cloudData.requests || this._getRequests())];
     const targetReq = requests.find(r => r.id === requestId);
 
     if (targetReq) {
       targetReq.status = 'accepted';
     }
 
-    const friendships = cloudData.friendships || this._getFriendships();
+    const friendships = [...(cloudData.friendships || this._getFriendships())];
     const newFriendship = {
       id: 'rel_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
       user1Id: targetReq ? targetReq.senderId : currentUser.id,
@@ -215,7 +238,7 @@ class FriendsService {
     if (!currentUser) return;
 
     const cloudData = await cloudDb.fetchCloudData();
-    const requests = cloudData.requests || this._getRequests();
+    const requests = [...(cloudData.requests || this._getRequests())];
     const targetReq = requests.find(r => r.id === requestId);
 
     if (targetReq) {
@@ -232,6 +255,7 @@ class FriendsService {
 
     const cloudData = await cloudDb.fetchCloudData();
     const cloudFriendships = cloudData.friendships || [];
+    const cloudUsers = cloudData.users || [];
     const localFriendships = this._getFriendships();
 
     const friendshipMap = new Map();
@@ -244,7 +268,7 @@ class FriendsService {
       .map(f => f.user1Id === currentUser.id ? f.user2Id : f.user1Id);
 
     const friends = friendUserIds
-      .map(id => authService.getUserById(id))
+      .map(id => authService.getUserById(id, cloudUsers))
       .filter(u => u !== null);
 
     const userMap = new Map();
