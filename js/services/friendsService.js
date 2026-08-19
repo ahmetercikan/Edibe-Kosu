@@ -155,11 +155,18 @@ class FriendsService {
     return newRequest;
   }
 
-  getPendingRequests() {
+  async getPendingRequests() {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) return { incoming: [], outgoing: [] };
 
-    const requests = this._getRequests();
+    const cloudData = await cloudDb.fetchCloudData();
+    const cloudReqs = cloudData.requests || [];
+    const localReqs = this._getRequests();
+
+    const reqMap = new Map();
+    localReqs.forEach(r => reqMap.set(r.id, r));
+    cloudReqs.forEach(r => reqMap.set(r.id, r));
+    const requests = Array.from(reqMap.values());
 
     const incoming = requests
       .filter(r => r.receiverId === currentUser.id && r.status === 'pending')
@@ -178,25 +185,28 @@ class FriendsService {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) throw new Error('Lütfen önce giriş yapın.');
 
-    const requests = this._getRequests();
-    const reqIndex = requests.findIndex(r => r.id === requestId && r.receiverId === currentUser.id);
+    const cloudData = await cloudDb.fetchCloudData();
+    const requests = cloudData.requests || this._getRequests();
+    const targetReq = requests.find(r => r.id === requestId);
 
-    if (reqIndex !== -1) {
-      requests[reqIndex].status = 'accepted';
-      this._saveRequests(requests);
+    if (targetReq) {
+      targetReq.status = 'accepted';
     }
 
-    const friendships = this._getFriendships();
+    const friendships = cloudData.friendships || this._getFriendships();
     const newFriendship = {
       id: 'rel_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-      user1Id: currentUser.id,
-      user2Id: requestId,
+      user1Id: targetReq ? targetReq.senderId : currentUser.id,
+      user2Id: targetReq ? targetReq.receiverId : currentUser.id,
       createdAt: Date.now()
     };
-
-    await cloudDb.saveFriendship(newFriendship);
-
     friendships.push(newFriendship);
+
+    cloudData.requests = requests;
+    cloudData.friendships = friendships;
+    await cloudDb.syncToCloud(cloudData);
+
+    this._saveRequests(requests);
     this._saveFriendships(friendships);
   }
 
@@ -204,20 +214,31 @@ class FriendsService {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) return;
 
-    const requests = this._getRequests();
-    const reqIndex = requests.findIndex(r => r.id === requestId && r.receiverId === currentUser.id);
+    const cloudData = await cloudDb.fetchCloudData();
+    const requests = cloudData.requests || this._getRequests();
+    const targetReq = requests.find(r => r.id === requestId);
 
-    if (reqIndex !== -1) {
-      requests[reqIndex].status = 'rejected';
+    if (targetReq) {
+      targetReq.status = 'rejected';
+      cloudData.requests = requests;
+      await cloudDb.syncToCloud(cloudData);
       this._saveRequests(requests);
     }
   }
 
-  getFriendsList() {
+  async getFriendsList() {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) return [];
 
-    const friendships = this._getFriendships();
+    const cloudData = await cloudDb.fetchCloudData();
+    const cloudFriendships = cloudData.friendships || [];
+    const localFriendships = this._getFriendships();
+
+    const friendshipMap = new Map();
+    localFriendships.forEach(f => friendshipMap.set(f.id, f));
+    cloudFriendships.forEach(f => friendshipMap.set(f.id, f));
+    const friendships = Array.from(friendshipMap.values());
+
     const friendUserIds = friendships
       .filter(f => f.user1Id === currentUser.id || f.user2Id === currentUser.id)
       .map(f => f.user1Id === currentUser.id ? f.user2Id : f.user1Id);
@@ -226,27 +247,36 @@ class FriendsService {
       .map(id => authService.getUserById(id))
       .filter(u => u !== null);
 
-    const listWithMe = [...friends, currentUser];
-    return listWithMe.sort((a, b) => (b.bestScore || 0) - (a.bestScore || 0));
+    const userMap = new Map();
+    friends.forEach(u => userMap.set(u.id, u));
+    userMap.set(currentUser.id, currentUser);
+
+    return Array.from(userMap.values()).sort((a, b) => (b.bestScore || 0) - (a.bestScore || 0));
   }
 
-  removeFriend(friendUserId) {
+  async removeFriend(friendUserId) {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) return;
 
-    let friendships = this._getFriendships();
+    const cloudData = await cloudDb.fetchCloudData();
+    let friendships = cloudData.friendships || this._getFriendships();
+
     friendships = friendships.filter(f => 
       !( (f.user1Id === currentUser.id && f.user2Id === friendUserId) ||
          (f.user2Id === currentUser.id && f.user1Id === friendUserId) )
     );
+
+    cloudData.friendships = friendships;
+    await cloudDb.syncToCloud(cloudData);
     this._saveFriendships(friendships);
   }
 
-  getUnreadIncomingCount() {
+  async getUnreadIncomingCount() {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) return 0;
 
-    const requests = this._getRequests();
+    const cloudData = await cloudDb.fetchCloudData();
+    const requests = cloudData.requests || this._getRequests();
     return requests.filter(r => r.receiverId === currentUser.id && r.status === 'pending').length;
   }
 }

@@ -135,7 +135,7 @@ class UIFriends {
     }
   }
 
-  updateHeaderUI(user) {
+  async updateHeaderUI(user) {
     const btnAuth = document.getElementById('btn-auth-modal');
     const btnFriends = document.getElementById('btn-friends-modal');
     const badge = document.getElementById('friends-badge');
@@ -145,7 +145,7 @@ class UIFriends {
       if (btnFriends) btnFriends.style.display = 'inline-flex';
 
       // Rozet Güncelleme
-      const unreadCount = friendsService.getUnreadIncomingCount();
+      const unreadCount = await friendsService.getUnreadIncomingCount();
       if (badge) {
         if (unreadCount > 0) {
           badge.textContent = unreadCount;
@@ -231,7 +231,7 @@ class UIFriends {
     const errorEl = document.getElementById('auth-error-msg');
     if (errorEl) {
       errorEl.textContent = msg;
-      errorEl.classList.remove('hidden');
+      errorEl.classList.add('hidden');
     }
   }
 
@@ -279,8 +279,8 @@ class UIFriends {
     const modal = document.getElementById('modal-friends');
     if (!modal) return;
 
-    modal.classList.remove('hidden');
     this.switchFriendsTab(this.activeTab);
+    modal.classList.remove('hidden');
   }
 
   closeFriendsModal() {
@@ -288,7 +288,7 @@ class UIFriends {
     if (modal) modal.classList.add('hidden');
   }
 
-  switchFriendsTab(tab) {
+  async switchFriendsTab(tab) {
     this.activeTab = tab;
     const btnList = document.getElementById('tab-friends-list');
     const btnReqs = document.getElementById('tab-friends-requests');
@@ -304,17 +304,17 @@ class UIFriends {
     if (tab === 'friends') {
       btnList?.classList.add('active');
       viewList?.classList.remove('hidden');
-      this.renderFriendsList();
+      await this.renderFriendsList();
     } else if (tab === 'requests') {
       btnReqs?.classList.add('active');
       viewReqs?.classList.remove('hidden');
-      this.renderPendingRequests();
+      await this.renderPendingRequests();
     } else if (tab === 'search') {
       btnSearch?.classList.add('active');
       viewSearch?.classList.remove('hidden');
       const inputSearch = document.getElementById('input-user-search');
       if (inputSearch && inputSearch.value.trim()) {
-        this.handleSearch(inputSearch.value);
+        await this.handleSearch(inputSearch.value);
       } else {
         this.renderSearchResults([]);
       }
@@ -328,11 +328,11 @@ class UIFriends {
     }
   }
 
-  renderFriendsList() {
+  async renderFriendsList() {
     const container = document.getElementById('container-friends-list');
     if (!container) return;
 
-    const friends = friendsService.getFriendsList();
+    const friends = await friendsService.getFriendsList();
     const currentUser = authService.getCurrentUser();
 
     if (friends.length === 0) {
@@ -372,9 +372,10 @@ class UIFriends {
 
     // Düello butonlarını bağla
     container.querySelectorAll('.send-duel-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         const id = e.currentTarget.getAttribute('data-id');
-        const friend = friendsService.getFriendsList().find(u => u.id === id);
+        const friendsList = await friendsService.getFriendsList();
+        const friend = friendsList.find(u => u.id === id);
         if (friend) {
           try {
             roomService.sendInvite(friend);
@@ -399,22 +400,22 @@ class UIFriends {
           icon: '🗑️'
         });
         if (confirmed) {
-          friendsService.removeFriend(id);
-          this.renderFriendsList();
-          this.updateHeaderUI(currentUser);
+          await friendsService.removeFriend(id);
+          await this.renderFriendsList();
+          await this.updateHeaderUI(currentUser);
           this.showToast('Arkadaş listenizden çıkarıldı.', 'info');
         }
       });
     });
   }
 
-  renderPendingRequests() {
+  async renderPendingRequests() {
     const containerIncoming = document.getElementById('container-incoming-requests');
     const containerOutgoing = document.getElementById('container-outgoing-requests');
 
     if (!containerIncoming || !containerOutgoing) return;
 
-    const { incoming, outgoing } = friendsService.getPendingRequests();
+    const { incoming, outgoing } = await friendsService.getPendingRequests();
 
     // Gelen istekler
     if (incoming.length === 0) {
@@ -441,21 +442,21 @@ class UIFriends {
       containerIncoming.innerHTML = html;
 
       containerIncoming.querySelectorAll('.accept-req-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
           const reqId = e.currentTarget.getAttribute('data-id');
-          friendsService.acceptFriendRequest(reqId);
-          this.renderPendingRequests();
-          this.updateHeaderUI(authService.getCurrentUser());
+          await friendsService.acceptFriendRequest(reqId);
+          await this.renderPendingRequests();
+          await this.updateHeaderUI(authService.getCurrentUser());
           this.showToast('Arkadaşlık isteği kabul edildi! 🎉', 'success');
         });
       });
 
       containerIncoming.querySelectorAll('.reject-req-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
           const reqId = e.currentTarget.getAttribute('data-id');
-          friendsService.rejectFriendRequest(reqId);
-          this.renderPendingRequests();
-          this.updateHeaderUI(authService.getCurrentUser());
+          await friendsService.rejectFriendRequest(reqId);
+          await this.renderPendingRequests();
+          await this.updateHeaderUI(authService.getCurrentUser());
           this.showToast('İstek reddedildi.', 'info');
         });
       });
