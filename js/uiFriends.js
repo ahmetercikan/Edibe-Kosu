@@ -239,7 +239,7 @@ class UIFriends {
     const errorEl = document.getElementById('auth-error-msg');
     if (errorEl) {
       errorEl.textContent = msg;
-      errorEl.classList.add('hidden');
+      errorEl.classList.remove('hidden');
     }
   }
 
